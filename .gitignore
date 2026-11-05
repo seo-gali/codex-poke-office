@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Build artifacts
+dist/
+build/
+coverage/
+.vite/
+*.tsbuildinfo
+
+# Runtime state
+/data/*
+!/data/.gitkeep
+*.log
+
+# Tool state and temporary files
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak

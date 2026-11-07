@@ -92,6 +92,7 @@ API·SSE·탐색 주기는 `server/src/index.ts`에서 연결하며, 별도 라�
 
 ```text
 client/src/main.tsx
+client/public/maps/               # 새로 제작한 인물 없는 6개 도트 지형
 client/src/app/App.tsx
 client/src/components/HabitatScene.tsx
 client/src/components/safari.ts
@@ -112,6 +113,7 @@ shared/session.ts
 tests/sessions.test.ts
 tests/browser-fixture.ts
 tests/safari.browser.js
+docs/map-prompts.json
 vite.config.ts
 tsconfig.json
 package.json

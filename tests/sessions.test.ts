@@ -37,12 +37,12 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
   const port = await freePort(), clientPort = await freePort();
   let apiFails = true, requested = 0;
   const mock = createServer((request, response) => {
-    assert.match(request.url!, /^\/pokemon\/\d+$/);
+    assert.match(request.url!, /^\/pokemon(?:-species)?\/\d+$/);
     requested++;
     if (apiFails) { response.writeHead(503).end(); return; }
     const id = Number(request.url!.split('/').at(-1));
     response.setHeader('Content-Type', 'application/json');
-    response.end(JSON.stringify({ id, name: `test-${id}`, sprites: { front_default: null }, private: secretMarker }));
+    response.end(JSON.stringify(request.url!.startsWith('/pokemon-species/') ? { id, names: [{ language: { name: 'en' }, name: `test-${id}` }, { language: { name: 'ko' }, name: `테스트${id}` }], private: secretMarker } : { id, name: `test-${id}`, sprites: { front_default: null }, private: secretMarker }));
   });
   const apiPort = await listen(mock); t.after(() => { mock.closeAllConnections(); mock.close(); });
   let output = '';
@@ -108,9 +108,12 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
   child.kill(); await once(child, 'exit');
   apiFails = false;
   const mapping = JSON.parse(await readFile(join(directory, 'data', 'assignments.json'), 'utf8'));
+  const cachedId = mapping[ids[0]];
+  await writeFile(join(directory, 'data', 'pokemon-cache.json'), JSON.stringify({ [cachedId]: { id: cachedId, name: 'old-english-name', spriteUrl: null } }));
   child = start();
   await until(async () => { try { return (await snapshot()).sessions.length === 3; } catch { return false; } }, '재시작 실패');
   for (const s of (await snapshot()).sessions) assert.equal(s.pokemon.id, mapping[s.sessionId]);
+  for (const s of (await snapshot()).sessions) assert.equal(s.pokemon.name, `테스트${s.pokemon.id}`);
   assert.equal((await snapshot()).sessions[0].pokemon.spriteUrl, null);
   const cache = await readFile(join(directory, 'data', 'pokemon-cache.json'), 'utf8');
   assert.ok(!cache.includes(secretMarker));

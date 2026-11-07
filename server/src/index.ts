@@ -109,11 +109,11 @@ const server = createServer(async (request, response) => {
     response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     response.end(path === '/api/sessions' ? encoded : JSON.stringify({ ok: !snapshot.error, error: snapshot.error })); return;
   }
-  const asset = path === '/' ? 'index.html' : /^\/assets\/[\w.-]+\.(js|css)$/.test(path) ? path.slice(1) : null;
+  const asset = path === '/' ? 'index.html' : /^\/assets\/[\w.-]+\.(js|css)$/.test(path) || /^\/maps\/(forest|wetland|desert|peak|rockybeach|savannah)\.png$/.test(path) ? path.slice(1) : null;
   if (!asset) { response.writeHead(404).end(); return; }
   try {
     const content = await readFile(resolve('dist', asset));
-    response.writeHead(200, { 'Content-Type': ({ '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' } as Record<string, string>)[extname(asset)] });
+    response.writeHead(200, { 'Content-Type': ({ '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png' } as Record<string, string>)[extname(asset)] });
     response.end(content);
   } catch { response.writeHead(404).end('먼저 npm run build를 실행하세요.'); }
 });

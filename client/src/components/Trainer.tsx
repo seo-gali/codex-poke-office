@@ -1,9 +1,47 @@
 import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 
-export function Trainer({ direction = 'down', walking = false, battle = false }: { direction?: string; walking?: boolean; battle?: boolean }) {
-  const [failed, setFailed] = useState(false);
+export const trainers = { brendan: '휘웅', may: '봄이' } as const;
+export type TrainerId = keyof typeof trainers;
+const spriteSheets = new Map<string, Promise<string>>();
+function transparentSheet(url: string) {
+  if (!spriteSheets.has(url)) spriteSheets.set(url, new Promise((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.referrerPolicy = 'no-referrer';
+    image.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+        const context = canvas.getContext('2d')!;
+        context.drawImage(image, 0, 0);
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+        // 인덱스 팔레트의 불투명 배경만 복원
+        const [red, green, blue, alpha] = pixels.data;
+        if (alpha !== 0) {
+          for (let i = 0; i < pixels.data.length; i += 4) {
+            if (pixels.data[i] === red && pixels.data[i + 1] === green && pixels.data[i + 2] === blue) pixels.data[i + 3] = 0;
+          }
+        }
+        context.putImageData(pixels, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      } catch { reject(new Error('트레이너 이미지를 표시할 수 없습니다.')); }
+    };
+    image.onerror = () => reject(new Error('트레이너 이미지를 불러올 수 없습니다.'));
+    image.src = url;
+  }));
+  return spriteSheets.get(url)!;
+}
+
+export function Trainer({ direction = 'down', walking = false, battle = false, character = 'brendan' }: { direction?: string; walking?: boolean; battle?: boolean; character?: TrainerId }) {
+  const [sheet, setSheet] = useState<{ url: string; source: string | null }>({ url: '', source: null });
   const [step, setStep] = useState(0);
+  const url = `https://raw.githubusercontent.com/pret/pokeemerald/master/graphics/${battle ? `trainers/back_pics/${character}.png` : `object_events/pics/people/${character}/walking.png`}`;
+  useEffect(() => {
+    let current = true;
+    transparentSheet(url).then(source => { if (current) setSheet({ url, source }); }, () => { if (current) setSheet({ url, source: null }); });
+    return () => { current = false; };
+  }, [url]);
   useEffect(() => {
     if (!walking) return;
     const timer = setInterval(() => setStep(value => 1 - value), 160);
@@ -11,8 +49,8 @@ export function Trainer({ direction = 'down', walking = false, battle = false }:
   }, [walking]);
   const facing = direction === 'up' ? 1 : direction === 'left' || direction === 'right' ? 2 : 0;
   const frame = walking ? [3, 5, 7][facing] + step : facing;
-  if (!failed) return <span className={`trainer trainer-art ${walking ? 'walking' : ''}`} role="img" aria-label="내 트레이너" style={{ transform: direction === 'right' ? 'scaleX(-1)' : undefined }}>
-    <img src={`https://raw.githubusercontent.com/pret/pokeemerald/master/graphics/${battle ? 'trainers/back_pics/brendan.png' : 'object_events/pics/people/brendan/walking.png'}`} alt="" referrerPolicy="no-referrer" onError={() => setFailed(true)}
+  if (sheet.url === url && sheet.source) return <span className={`trainer trainer-art ${walking ? 'walking' : ''}`} role="img" aria-label={`내 트레이너 · ${trainers[character]}`} style={{ transform: direction === 'right' ? 'scaleX(-1)' : undefined }}>
+    <img src={sheet.source} alt="" referrerPolicy="no-referrer"
       style={(battle ? { width: '100%', height: '400%', left: 0, top: 0 } : { width: '900%', height: '100%', left: `${-frame * 100}%`, top: 0 }) as CSSProperties} />
   </span>;
   const back = direction === 'up';

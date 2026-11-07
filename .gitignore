@@ -23,3 +23,7 @@ coverage/
 Thumbs.db
 *.tmp
 *.bak
+
+# Local reference archive
+/ai-office-main.zip
+.playwright-mcp/

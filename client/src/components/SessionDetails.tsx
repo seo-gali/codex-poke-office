@@ -1,0 +1,30 @@
+import { useEffect, useRef } from 'react';
+import type { SessionView } from '../../../shared/session.ts';
+import { labels, usageLabels } from './HabitatScene.tsx';
+import { PokemonAgent } from './PokemonAgent.tsx';
+import { Trainer } from './Trainer.tsx';
+import type { SafariMap } from './safari.ts';
+
+export const time = (value: string | null) => value ? new Date(value).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '확인되지 않음';
+export function SessionDetails({ session, map, still, onClose, onRelease }: { session?: SessionView; map: SafariMap; still: boolean; onClose: () => void; onRelease: (session: SessionView) => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (session && !dialog.current!.open) dialog.current!.showModal();
+    if (!session) dialog.current!.close();
+  }, [session]);
+  const battlefield = ({ desert: 'desert', rockybeach: 'beach', wetland: 'river', peak: 'mountain', savannah: 'meadow' } as Record<string, string>)[map.id] ?? 'forest';
+  return <dialog ref={dialog} className="encounter-dialog" aria-labelledby="encounter-title" onCancel={onClose}>
+    {session && <>
+      <div className="encounter-scene">
+        <img className="battle-background" src={`https://play.pokemonshowdown.com/fx/bg-${battlefield}.png`} alt="" referrerPolicy="no-referrer" />
+        <div className="encounter-card"><h2 id="encounter-title">{session.pokemon.name}</h2><span className={`usage-badge ${session.usage}`}>{usageLabels[session.usage] ?? '확인 불가'}</span><p>{session.projectName ?? '프로젝트 미확인'}</p></div>
+        <div className="encounter-pokemon"><PokemonAgent pokemon={session.pokemon} still={still} animate /></div>
+        <div className="encounter-trainer"><Trainer direction="up" battle /></div>
+        <span className="encounter-area">{map.name}</span>
+      </div>
+      <div className="encounter-menu"><p>야생의 <strong>{session.pokemon.name}</strong> 세션을 만났다!<br /><small>{labels[session.observation]}</small></p><div><button type="button" className="return-button" onClick={onClose}>탐험으로 돌아가기</button><button type="button" className="release-button" disabled={session.usage !== 'inactive'} onClick={() => onRelease(session)}>포켓몬 놓아주기 ↗</button></div></div>
+      <dl className="encounter-metadata"><div><dt>프로젝트</dt><dd>{session.projectName ?? '확인되지 않음'}</dd></div><div><dt>세션 ID</dt><dd className="mono">{session.shortId}</dd></div><div><dt>마지막 로그 이벤트</dt><dd>{time(session.lastObservedAt)}</dd></div><div><dt>파일 수정 시각</dt><dd>{time(session.lastFileModifiedAt)}</dd></div></dl>
+      <p className="encounter-note">{session.usage === 'active' ? 'Codex가 이 기록을 열고 있어 놓아줄 수 없습니다.' : session.usage === 'inactive' ? '놓아주기는 확인 후 원본 대화 JSONL을 영구 삭제합니다.' : '사용 여부를 확인할 수 없어 놓아주기가 제한됩니다.'} 활동·완료 기록은 프로세스의 현재 상태를 뜻하지 않습니다.</p>
+    </>}
+  </dialog>;
+}

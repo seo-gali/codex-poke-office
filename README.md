@@ -1,11 +1,11 @@
 # Codex Poké Office
 
-> 여러 Codex CLI 세션을 랜덤 포켓몬으로 표현하는 로컬 픽셀 아트 작업실
+> 직접 탐험하며 고정 심볼로 배치된 Codex 세션 포켓몬을 만나는 로컬 도트 사파리
 
 **Repository:** `codex-poke-office`  
 **Local path:** `D:\01_Programming\08_AI\Agent\codex-poke-office`  
 **Environment:** Windows 11 · wmux · Codex CLI · Node.js · React · TypeScript  
-**Status:** 기획 문서 및 디렉터리 골격 작성 완료 / 애플리케이션 미구현
+**Status:** 초기 구현 및 실제 로컬 세션 대시보드 검증 완료
 
 ## 프로젝트 목적
 
@@ -27,6 +27,8 @@ Codex를 실행하거나 복원할 때 모니터링 화면에서 세션을 발�
 | 동기화 | 대시보드 새로고침 없이 변경 정보 반영 |
 | 로컬 저장 | 세션 ID와 포켓몬 ID의 대응 관계만 별도 파일에 영속화 |
 | 오류 처리 | 로그 파일 손상·API 실패·스프라이트 부재에도 전체 화면 유지 |
+| 사용 여부 | Windows에서 JSONL을 연 Codex 프로세스 확인, `사용 중 / 사용 안 함 / 확인 불가` 표시 |
+| 놓아주기 | 선택·확인한 미사용 세션의 원본 JSONL 영구 삭제, 열린 기록과 확인 불가 기록 보호 |
 
 ### 상태 표시 원칙
 
@@ -43,14 +45,14 @@ Codex 세션 JSONL은 **프로세스 생존 상태를 보장하는 신호가 아
 
 | 영역 | 기술 | 역할 |
 |---|---|---|
-| Frontend | React + TypeScript + Vite | 픽셀 사무실, 포켓몬 렌더링, 세션 상세 |
+| Frontend | React + TypeScript + Vite | 사파리 탐험, 고정 심볼 인카운터, 세션 상세 |
 | Local server | Node.js + TypeScript | 세션 파일 탐색, 이벤트 파싱, 로컬 API |
 | Live updates | Server-Sent Events (SSE) | 서버 → 브라우저 단방향 변경 알림 |
 | Source | `%USERPROFILE%\.codex\sessions` | Codex 세션 JSONL 읽기 전용 |
 | Pokémon data | [PokéAPI v2](https://pokeapi.co/docs/v2) | 포켓몬 이름 및 스프라이트 URL |
 | Persistence | 로컬 JSON 파일 | 세션↔포켓몬 배정 상태 |
 
-`CODEX_HOME`이 설정되어 있다면 그 위치의 `sessions` 디렉터리를 우선합니다. 구현 단계에서 이 동작을 확인합니다.
+`CODEX_HOME`이 설정되어 있다면 그 위치의 `sessions` 디렉터리를 우선합니다. 비어 있으면 사용자 홈의 `.codex/sessions`를 읽습니다. 별도 서버 라이브러리 없이 Node.js 내장 HTTP·파일 API를 사용합니다.
 
 ### 데이터 흐름
 
@@ -75,13 +77,17 @@ flowchart LR
 5. 로그에서 새로운 기록을 관측하면 서버가 정제된 상태를 전송합니다.
 6. 브라우저가 해당 포켓몬의 애니메이션과 카드 정보를 갱신합니다.
 
-오래된 기록을 현재 실행 중인 세션으로 오인하지 않도록 최근 관측 시간 기준으로 기본 표시 목록을 제한합니다. 이미 실행 중인 세션은 대시보드를 다시 켜더라도 자동으로 발견해야 합니다.
+기본 목록은 최근 24시간 이내 **파일이 수정된** 기록입니다. `SESSION_LOOKBACK_HOURS`로 변경할 수 있습니다. 파일 수정 시각과 JSONL 이벤트 시각은 별도로 표시하며, 파일 크기가 늘어난 경우 마지막 읽기 위치 이후만 처리합니다. 디렉터리는 기본 2초마다 다시 탐색합니다.
+
+세션 ID는 `session_meta.payload.id`의 UUID 형식을 확인한 후 사용합니다. 프로젝트명은 `cwd`의 마지막 디렉터리명만 전달합니다. 실제 로컬 기록에서 확인한 `event_msg.payload.type`의 `task_started`, `task_complete`, `turn_aborted`를 관측에 사용합니다. 마지막 이벤트가 60초 이내이면 최근 활동으로 표시하며, 완료 기록은 다음 시작·중단 기록 전까지 유지합니다. 손상되거나 아직 완성되지 않은 레코드는 상태 미확인으로 표시합니다.
+
+최초 배정은 기본 도감 번호 1–1025 중 무작위로 선택하며 중복을 허용합니다. `data/assignments.json`에 배정을 먼저 저장하고 PokéAPI를 조회합니다. API 실패 시 같은 ID의 플레이스홀더를 표시하고 1분 후 재시도합니다. 조회한 이름과 스프라이트 URL만 `data/pokemon-cache.json`에 저장합니다. 애니메이션이 제공되면 새 활동에 1.2초 반응하며, 이후 정적 이미지로 돌아갑니다.
 
 ## 화면 구성
 
 - **상단:** 서비스명, 세션 수, 서버 연결 상태, 마지막 갱신 시간
-- **중앙:** 포켓몬들이 배치되는 2D 픽셀 사무실
-- **하단 또는 우측:** 선택한 세션의 프로젝트명·세션 ID·포켓몬·관측 상태
+- **중앙:** 플레이어가 이동하고 세션 포켓몬이 고정 심볼로 나타나는 도트 사파리
+- **인카운터:** 선택한 세션의 프로젝트명·세션 ID·포켓몬·관측·사용 상태
 - **빈 화면:** 세션 미발견 / 연결 끊김 / 포켓몬 API 오류를 구분한 안내
 
 세부 배치, 타이포그래피, 반응형 기준은 [`DESIGN.md`](./DESIGN.md)를 따릅니다.
@@ -97,38 +103,103 @@ codex-poke-office/
 ├── .env.example
 ├── .editorconfig
 ├── .gitignore
-├── docs/
-│   └── PROJECT_STRUCTURE.md
-├── client/
-│   └── src/
-│       ├── app/
-│       ├── components/
-│       └── styles/
-├── server/
-│   └── src/
-│       ├── api/
-│       ├── codex/
-│       └── storage/
-├── shared/
-├── tests/
-│   └── fixtures/
-└── data/
+├── package.json / package-lock.json
+├── tsconfig.json / vite.config.ts
+├── docs/PROJECT_STRUCTURE.md
+├── client/index.html
+├── client/src/main.tsx
+├── client/src/app/App.tsx
+├── client/src/components/         # 사파리·캐릭터·인카운터·놓아주기 확인
+├── client/src/styles/index.css
+├── server/src/index.ts            # HTTP·SSE·주기적 탐색
+├── server/src/config.ts           # 환경 변수 검증
+├── server/src/codex/              # 탐색·증분 파싱·Windows 파일 사용 조회·삭제
+├── server/src/storage/            # 배정·PokéAPI 캐시
+├── shared/session.ts              # 공개 응답 타입
+├── tests/sessions.test.ts         # 실제 서버 HTTP/SSE 통합 검증
+└── data/                          # 실행 상태·검증 화면, Git 제외
 ```
 
-현재 하위 디렉터리에는 빈 폴더를 Git에 보존하기 위한 `.gitkeep`만 들어 있습니다. **서버, 프론트엔드, 패키지 설정과 실행 스크립트는 아직 구현되지 않았습니다.** 담당 Codex가 `CODEX_TASK.md`에 따라 생성합니다.
+모듈별 책임은 [`docs/PROJECT_STRUCTURE.md`](./docs/PROJECT_STRUCTURE.md)에 정리합니다. 참고용 `ai-office-main.zip`은 화면·좌석 선택 구성을 읽기 전용으로 검토했으며, Electron·Phaser 코드나 이미지 자산을 가져오지 않았습니다. 압축 파일은 Git에서 제외합니다.
 
-## 개발 시작
+## 로컬 실행
 
-1. ZIP을 `D:\01_Programming\08_AI\Agent\codex-poke-office`에 압축 해제합니다.
-2. 해당 폴더에서 Codex CLI를 실행합니다.
-3. `AGENTS.md` 및 [`CODEX_TASK.md`](./CODEX_TASK.md)의 구현 지시를 따릅니다.
-4. 구현 완료 시 `npm install`, `npm run dev`로 로컬에서 실행 가능하도록 구성합니다.
+Node.js 24.10 이상과 npm이 필요합니다. 검증 환경은 Windows / PowerShell, Node.js 24.22.1, npm 11.17.0입니다.
 
-> 현시점의 압축 파일은 **기획·설계 및 프로젝트 골격**입니다. `npm run dev`는 아직 실행할 수 없습니다.
+```powershell
+npm install
+npm run dev
+```
+
+브라우저에서 `http://127.0.0.1:5173`을 엽니다. API는 `http://127.0.0.1:4100`입니다. 기존 터미널에서 Codex 작업을 계속하면 JSONL 변경이 자동 반영됩니다. 이 앱은 Codex나 wmux를 실행하지 않습니다.
+
+선택적으로 `.env.example`을 `.env`로 복사해 포트·세션 위치·탐색 주기를 설정할 수 있습니다. `.env` 없이도 문서의 기본값으로 실행합니다. `HOST`는 `127.0.0.1`만 허용하며, 잘못된 숫자 설정이나 손상된 배정 저장 파일은 오류로 처리합니다. 새 포켓몬 정보를 조회하려면 PokéAPI에, 이미지를 표시하려면 GitHub 스프라이트 서버에 연결할 수 있어야 합니다.
+
+```powershell
+npm run check
+npm test
+npm run build
+npm start
+```
+
+`check`는 TypeScript 검사, `test`는 임시 합성 JSONL과 실제 자식 서버를 사용하는 HTTP/SSE 통합 검증입니다. 실제 Codex 기록이나 프로세스는 건드리지 않습니다. `build` 결과는 `dist/`에 생성되며 `start`는 로컬 API와 빌드한 화면을 `http://127.0.0.1:4100`에서 제공합니다. 종료는 해당 실행 터미널의 `Ctrl+C`입니다.
+
+## 사파리 탐험과 놓아주기
+
+화면 이름은 **Codex Poké Safari**입니다. 직접 플레이어를 조작해 **숲·늪지·사막·산봉우리·바위 해안·사바나** 6개 구역에서 세션 포켓몬을 만납니다. 세션 ID로 구역이 정해지며 포켓몬은 고정 심볼입니다. 구역 선택에는 표시 대상 수가 나오고 `모두 / 사용 중 / 사용 안 함`으로 필터링합니다.
+
+- **이동:** 방향키·WASD 또는 화면 방향 버튼을 누릅니다. 카메라가 플레이어를 따라가며 페이지 스크롤은 없습니다.
+- **만남:** 심볼 가까이에서 E키·말 걸기 버튼·심볼 클릭. 먼 심볼 클릭은 접근 안내만 표시합니다.
+- **인카운터:** 도트 배틀 배경에서 포켓몬·프로젝트·세션 ID·로그 관측·사용 여부를 확인합니다. 돌아가기·Escape로 탐험을 이어갑니다. HP·레벨·전투 기능은 없습니다.
+- **놓아주기:** 사용 안 함으로 확인된 포켓몬의 버튼을 누르고 최종 확인하면 해당 세션 ID의 JSONL 원본을 영구 삭제합니다. 취소하면 보존합니다.
+
+사용 여부는 로그 시각과 별개입니다. Windows Restart Manager가 JSONL을 연 `codex` 프로세스를 찾으면 `사용 중`, 열린 프로세스가 없으면 `사용 안 함`, 조회 권한 부족·오류·다른 프로그램 사용은 `확인 불가`입니다. 서버는 삭제 직전에 사용 여부·세션 ID·세션 폴더 내부 경로를 다시 확인하고 독점 접근을 확보합니다. **사용 중·확인 불가 세션은 삭제할 수 없습니다. 삭제한 원본으로는 대화를 이어갈 수 없으며, 공유 색인·DB는 변경하지 않으므로 Codex 목록 메타데이터는 남을 수 있습니다.**
+
+기본 관리 대상은 `SESSION_LOOKBACK_HOURS=24` 이내 수정된 기록입니다. 더 오래된 기록을 보려면 기존 환경 변수의 시간을 늘립니다. 일괄 삭제와 전체 과거 기록 전용 화면은 추가하지 않았습니다.
+
+맵은 [Serebii의 HGSS 사파리존](https://www.serebii.net/pokearth/johto/safarizone.shtml), 인카운터 배경은 [Pokémon Showdown](https://play.pokemonshowdown.com/fx/), 트레이너는 [pret/pokeemerald](https://github.com/pret/pokeemerald/tree/master/graphics/object_events/pics/people/brendan), 포켓몬은 PokéAPI의 도트 스프라이트를 외부 로딩합니다. HOME 렌더는 사용하지 않습니다. 원본 이미지 파일은 저장소·번들에 넣지 않으며 인터넷 연결이 필요합니다. 맵에 원래 포함된 인물·포켓몬은 배경이고 이름표가 있는 심볼이 실제 세션입니다.
+
+2026-11-07 직접 확인한 결과:
+
+- 실제 최근 세션 19개가 6개 구역에 분산되고 각 맵 이미지가 정상 로딩됨. 현재 대화의 사용 중 표시 확인.
+- 방향키 이동·화면 방향 버튼·근접 E키 인카운터·탐험 복귀 확인. 이동 전후 심볼 위치 동일.
+- 현재 심볼 모두가 각 구역의 시작점에서 접근 가능한 지상 지점에 배치되었음을 확인.
+- 너비 1440 / 390 / 320px에서 가로·세로 페이지 스크롤 없이 이동 가능.
+- 실제 대화에서는 사용 여부와 삭제 버튼 보호만 확인하고 원본 삭제는 수행하지 않음.
+- 별도 합성 서버의 브라우저에서 탐험 → 근접 만남 → 놓아주기 확인 → 취소 시 보존 → 최종 확인 시 삭제·인카운터 종료 확인.
+- HTTP 통합 검증에서 열린 파일 보호, 확인 없는 요청·외부 Origin 거부, 동일 ID의 여러 파일 삭제, 다른 세션 보존, 폴더 밖 경로·다른 ID 삭제 차단 확인.
+
+검증 화면은 `data/safari-explore.png`, `data/safari-encounter.png`, `data/safari-release-confirm.png`, `data/safari-released.png`, `data/safari-wetland.png`, `data/safari-desert.png` 등에 있습니다(Git 제외). 통합 검증은 `npm test`, 합성 브라우저 서버는 `npm run build` 후 `node tests/browser-fixture.ts`로 실행합니다(`http://127.0.0.1:4191`). Playwright MCP의 `browser_run_code_unsafe`에 `filename: tests/safari.browser.js`를 전달하면 합성 기록에서 이동·만남·취소·삭제를 재검증합니다. Windows 파일 사용 조회가 제한되는 샌드박스에서는 확인 불가로 표시되고 삭제가 차단됩니다.
+
+현재 충돌은 큰 장애물을 사각형으로 처리하며 정밀 타일 충돌은 구현하지 않았습니다. 실제 `codex resume`과 새 Codex 프로세스 실행은 기존 프로세스를 조작하지 않는 조건에 따라 수행하지 않았습니다.
+
+## 초기 버전에서 확인한 결과
+
+2026-11-06 로컬 검증 결과입니다. 아래 실제 기록 검증과 합성 데이터 검증을 구분합니다.
+
+| 검증 | 결과 |
+|---|---|
+| `npm install` | 승인된 최소 패키지 설치 완료 |
+| `npm run check`, `npm test`, `npm run build` | 종료 코드 0, 통합 검증 1개 통과 |
+| `npm start` + 빌드 화면 | 4100 포트에서 화면·JS·CSS 응답 200, health 정상, 브라우저 오류 0개 |
+| 실제 Codex 기록 | 최근 기록 15개를 한 화면에서 선택 가능, 포켓몬 이미지 15개 로딩, 깨진 이미지 0개 |
+| 실제 기록 + 서버 재시작·브라우저 새로고침 | 기존 15개 세션의 포켓몬 ID 모두 동일 |
+| 브라우저 조작 | 클릭·Enter 선택과 상세 정보 일치, 최근 활동 필터 동작 |
+| 화면 너비 1440 / 390 / 320px | 가로 넘침 없음, 모든 좌석 선택 가능 |
+| 모션 줄이기 | GIF 대신 정적 이미지 표시 |
+| 신규·동일 ID·오래된 기록 | 합성 JSONL로 SSE 추가, 중복 방지, 동일 배정, 25시간 지난 기록 제외 확인 |
+| 손상·부분 레코드·API 장애 | 합성 기록으로 상태 미확인·부분 레코드 복구·다른 세션 유지·배정 유지 확인 |
+| 빈 사무실 | 브라우저 모의 응답으로 빈 메시지와 사무실·빈 책상 유지 확인 |
+| 민감 정보 | HTTP/SSE·저장 파일에 합성 비공개 본문 미포함, 실제 응답은 허용 필드와 프로젝트 마지막 이름만 포함 |
+| 외부 요청 | 서버는 포켓몬 번호만 조회, 브라우저 외부 요청은 포켓몬 스프라이트로 한정 |
+
+검증 화면은 Git에서 제외하는 `data/dashboard-desktop.png`, `data/dashboard-390.png`, `data/dashboard-320.png`, `data/dashboard-empty.png`에 있습니다. 통합 검증은 `npm test`로 다시 실행할 수 있습니다.
+
+**미검증:** 실제 `codex resume` 명령과 새 Codex 프로세스 실행은 기존 환경·프로세스에 손대지 않는 조건에 따라 수행하지 않았습니다. 동일 ID가 다시 나타나는 경로는 합성 기록으로 확인했습니다. 다음 작업은 사용자가 기존 터미널에서 새 세션 생성·`codex resume`을 수행하며 화면의 등장과 배정 유지를 확인하는 것입니다. 대형 기록은 최초 1회 전체 읽기가 필요하고, 이후에는 증분으로 처리합니다.
 
 ## 보안·운영 제약
 
-- Codex JSONL, Codex 설정, wmux 설정을 수정·이동·삭제하지 않습니다.
+- Codex·wmux 설정과 프로세스는 변경하지 않습니다. 현재 사용자 요청으로 추가하는 ‘놓아주기’만 선택·확인한 미사용 세션 JSONL을 삭제하며, 공유 색인·DB는 변경하지 않습니다.
 - 로컬 서버는 `127.0.0.1`에만 바인딩합니다.
 - 클라이언트에 로그 원문, 계정 정보, 도구 호출 인수를 전달하지 않습니다.
 - 승인·명령 실행·세션 종료 같은 제어 기능은 구현하지 않습니다.

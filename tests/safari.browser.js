@@ -1,11 +1,16 @@
 async (page) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   const check = (value, message) => { if (!value) throw new Error(message); };
   check(new URL(page.url()).port === '4191', '합성 서버 4191에서만 삭제 검증을 실행합니다');
   const snapshot = async () => (await (await page.request.get('http://127.0.0.1:4191/api/sessions')).json()).sessions.map(session => ({ ...session, pokemon: session.pokemon.red }));
+  await page.evaluate(() => localStorage.removeItem('poke-office-area-count'));
+  await page.reload();
   await page.locator('.safari-symbol').first().waitFor();
   await page.getByRole('combobox', { name: '캐릭터 선택' }).selectOption('red');
   const before = await snapshot();
-  check(before.length === 1 && before[0].projectName === 'browser-check', '합성 기록만 허용합니다');
+  check(before.length === 3 && before.every(s => s.projectName === 'browser-check'), '합성 기록만 허용합니다');
+  check(await page.getByRole('combobox', { name: '사파리 구역 이동' }).locator('option').count() === 1, '처음부터 여러 에리어가 열림');
+  check(await page.locator('.safari-symbol').count() === before.length, '첫 맵에 세션이 모이지 않음');
   check(before[0].pokemon.name === '피카츄', '한글 이름 누락');
   await page.waitForFunction(() => document.querySelector('.safari-symbol img')?.src.endsWith('.gif'));
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -15,11 +20,18 @@ async (page) => {
   check(await page.title() === 'Codex Poké Office', '제목 복원 실패');
   check(await page.locator('h1').textContent() === 'Codex Poké Office', '화면 제목 불일치');
   check(await page.locator('.page-heading p').count() === 0, '제목 부제가 남음');
-  check(await page.getByRole('combobox', { name: '캐릭터 선택' }).locator('option').count() === 4, '캐릭터 추가 누락');
+  check(await page.getByRole('combobox', { name: '캐릭터 선택' }).locator('option').count() === 13, '캐릭터 추가 누락');
   await page.getByRole('combobox', { name: '캐릭터 선택' }).selectOption('leaf');
   await page.waitForFunction(() => document.querySelector('.safari-symbol img')?.alt === '이상해씨');
   await page.getByRole('combobox', { name: '캐릭터 선택' }).selectOption('brendan');
   await page.waitForFunction(() => document.querySelector('.safari-symbol img')?.alt === '나무지기');
+  await page.getByRole('combobox', { name: '캐릭터 선택' }).selectOption('victor');
+  await page.waitForFunction(() => document.querySelector('.player [aria-label="내 트레이너 · 승재"] img')?.src.startsWith('data:'));
+  check(await page.locator('.player').evaluate(player => { const bounds = player.getBoundingClientRect(); return Math.abs(bounds.width - bounds.height) < 1; }), '추가 캐릭터 비율 오류');
+  await page.locator('.safari-symbol').first().click();
+  await page.waitForFunction(() => document.querySelector('.encounter-trainer img')?.src.startsWith('data:'));
+  check(await page.locator('.encounter-trainer img').evaluate(image => image.naturalWidth === 48 && image.naturalHeight === 48), '추가 캐릭터 인카운터 오류');
+  await page.getByRole('button', { name: '탐험으로 돌아가기', exact: true }).click();
   await page.getByRole('combobox', { name: '캐릭터 선택' }).selectOption('may');
   await page.waitForFunction(() => document.querySelector('.player [aria-label="내 트레이너 · 봄이"] img')?.src.startsWith('data:'));
   const alpha = await page.locator('.player img').evaluate(image => {
@@ -60,11 +72,43 @@ async (page) => {
     return opaque(original) === opaque(image);
   });
   check(preserved, '원래 투명한 배틀 이미지의 본체가 손상됨');
+  const viewport = page.viewportSize();
+  for (const [width, height] of [[390, 844], [320, 480], [844, 390], [568, 320]]) {
+    await page.setViewportSize({ width, height });
+    const dialogFits = await page.locator('.encounter-dialog').evaluate(dialog => {
+      const bounds = dialog.getBoundingClientRect();
+      return bounds.left >= 0 && bounds.right <= innerWidth && bounds.top >= 0 && bounds.bottom <= innerHeight && dialog.scrollWidth <= dialog.clientWidth;
+    });
+    check(dialogFits, `${width}x${height} 인카운터 넘침`);
+    await page.getByRole('button', { name: '탐험으로 돌아가기', exact: true }).click();
+    await page.getByRole('button', { name: '전체 맵', exact: true }).click();
+    const areasFit = await page.evaluate(() => {
+      const view = document.querySelector('.safari-view').getBoundingClientRect();
+      return document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight && [...document.querySelectorAll('.area-preview')].every(area => {
+        const bounds = area.getBoundingClientRect();
+        return bounds.left >= view.left && bounds.right <= view.right + 1 && bounds.top >= view.top && bounds.bottom <= view.bottom + 1;
+      });
+    });
+    check(areasFit, `${width}x${height} 전체 맵 넘침`);
+    await page.getByRole('button', { name: '숲 에리어 탐험 · 3마리', exact: true }).click();
+    await page.locator('.safari-symbol').first().click();
+  }
+  await page.setViewportSize(viewport);
   await page.getByRole('button', { name: '탐험으로 돌아가기', exact: true }).click();
   const position = await page.locator('.player').getAttribute('style');
   await page.getByRole('button', { name: '전체 맵', exact: true }).click();
+  for (let count = 1; count < 6; count++) {
+    check(await page.locator('.area-preview').count() === count, '에리어가 한 개씩 추가되지 않음');
+    const total = await page.locator('.area-preview small').evaluateAll(elements => elements.reduce((sum, e) => sum + Number(e.textContent.match(/^\d+/)[0]), 0));
+    check(total === before.length, '에리어 추가 중 세션이 누락됨');
+    await page.getByRole('button', { name: `에리어 추가 · ${count}/6`, exact: true }).click();
+  }
   check(await page.locator('.area-preview').count() === 6, '전체 에리어가 표시되지 않음');
-  await page.getByRole('button', { name: '늪지 에리어 탐험 · 0마리', exact: true }).click();
+  check(await page.getByRole('button', { name: '에리어 추가 · 6/6', exact: true }).isDisabled(), '에리어 상한 누락');
+  await page.reload();
+  check(await page.getByRole('combobox', { name: '사파리 구역 이동' }).locator('option').count() === 6, '에리어 저장 실패');
+  await page.getByRole('button', { name: '전체 맵', exact: true }).click();
+  await page.getByRole('button', { name: '늪지 에리어 탐험 · 1마리', exact: true }).click();
   check(await page.locator('#habitat-title').textContent() === '늪지 에리어', '전체 맵 구역 이동 실패');
   await page.getByRole('button', { name: '전체 맵', exact: true }).click();
   await page.getByRole('button', { name: '숲 에리어 탐험 · 1마리', exact: true }).click();
@@ -107,11 +151,12 @@ async (page) => {
   const confirm = page.locator('.release-dialog'); await confirm.waitFor({ state: 'visible' });
   check((await confirm.innerText()).includes('영구 삭제'), '원본 삭제 안내 누락');
   await confirm.getByRole('button', { name: '곁에 두기', exact: true }).click();
-  check((await snapshot()).length === 1, '취소한 기록이 소실됨');
+  check((await snapshot()).length === before.length, '취소한 기록이 소실됨');
   await page.getByRole('button', { name: '포켓몬 놓아주기 ↗' }).click();
   await confirm.getByRole('button', { name: '기록 삭제하고 놓아주기', exact: true }).click();
   await page.waitForFunction(() => document.querySelectorAll('.safari-symbol').length === 0);
-  check((await snapshot()).length === 0, '확인 후 삭제 실패');
+  check((await snapshot()).length === before.length - 1, '확인 후 삭제 실패');
+  check((await snapshot()).every(s => s.sessionId !== before[0].sessionId), '선택한 기록이 남음');
   check(!await page.locator('.encounter-dialog').isVisible(), '삭제 후 인카운터가 남음');
   return { title: true, koreanName: true, mapAnimation: true, reducedMotion: true, fourActions: true, infoToggle: true, pokedex: true, copyId: true, transparentTrainer: true, characterSelection: true, generationSwitch: true, remoteClick: true, allAreas: true, fullMap: true, pan: true, wheelZoom: true, pokemonVisible: true, movement: true, fixedSymbol: true, sessionHud: true, encounter: true, cancelPreserves: true, confirmedDeletion: true };
 }

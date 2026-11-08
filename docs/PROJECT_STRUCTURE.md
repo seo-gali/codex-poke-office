@@ -72,7 +72,7 @@ interface SessionRecord {
   sessionId: string;
   shortId: string;
   projectName: string | null;
-  pokemon: Record<'red' | 'leaf' | 'brendan' | 'may', {
+  pokemon: Record<TrainerId, {
     id: number;
     name: string;
     spriteUrl: string | null;
@@ -86,7 +86,7 @@ interface SessionRecord {
 }
 ```
 
-`observation`은 실제 프로세스 실행 상태가 아니라 관측 결과입니다. API는 캐릭터별 포켓몬을 전달하고 프런트엔드는 선택한 캐릭터의 `pokemon` 하나를 `SessionView`로 표시합니다. 배정 ID는 API 장애에도 유지하며, 조회 실패 시 `name`은 `포켓몬 #번호`, `spriteUrl`은 `null`입니다. 확정 타입은 `shared/session.ts`, 캐릭터·세대 후보는 `shared/trainers.ts`를 기준으로 합니다.
+`observation`은 실제 프로세스 실행 상태가 아니라 관측 결과입니다. API는 캐릭터별 포켓몬을 전달하고 프런트엔드는 선택한 캐릭터의 `pokemon` 하나를 `SessionView`로 표시합니다. 배정 ID는 API 장애에도 유지하며, 조회 실패 시 `name`은 `포켓몬 #번호`, `spriteUrl`은 `null`입니다. 확정 타입은 `shared/session.ts`, `TrainerId`·13개 캐릭터·세대별 GIF 후보는 `shared/trainers.ts`를 기준으로 합니다. 열린 에리어 개수는 브라우저에 저장하고 `safari.ts`가 그 개수 안에서만 세션을 분산합니다.
 
 ## 구현 파일
 

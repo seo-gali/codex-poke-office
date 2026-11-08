@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { loadJson, saveJson } from './assignments.ts';
 import type { Pokemon } from '../../../shared/session.ts';
+import { animatedPokemon } from '../../../shared/trainers.ts';
 
 const types: Record<string, string> = { normal: '노말', fire: '불꽃', water: '물', electric: '전기', grass: '풀', ice: '얼음', fighting: '격투', poison: '독', ground: '땅', flying: '비행', psychic: '에스퍼', bug: '벌레', rock: '바위', ghost: '고스트', dragon: '드래곤', dark: '악', steel: '강철', fairy: '페어리' };
 function sprite(value: unknown): string | null {
@@ -29,7 +30,7 @@ export async function pokemonCache(directory: string, api: string) {
       const [body, species] = await Promise.all(responses.map(response => response.json()));
       const name = Array.isArray(species.names) ? species.names.find((entry: { language?: { name?: string } }) => entry.language?.name === 'ko')?.name : null;
       if (body.id !== id || species.id !== id || typeof name !== 'string' || !/[가-힣]/.test(name)) throw new Error('Invalid pokemon');
-      const spriteUrl = sprite(body.sprites?.versions?.['generation-v']?.['black-white']?.animated?.front_default);
+      const spriteUrl = animatedPokemon.has(id) ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/${id}.gif` : null;
       if (!spriteUrl?.endsWith('.gif') || !Array.isArray(body.types) || !body.types.every((entry: { type?: { name?: string } }) => typeof entry.type?.name === 'string' && Object.hasOwn(types, entry.type.name))) throw new Error('Animated sprite or type unavailable');
       const description = Array.isArray(species.flavor_text_entries) ? species.flavor_text_entries.find((entry: { language?: { name?: string } }) => entry.language?.name === 'ko')?.flavor_text : null;
       const value = { id, name, spriteUrl, types: body.types.map((entry: { type: { name: string } }) => types[entry.type.name]), description: typeof description === 'string' ? description.replace(/[\n\f]/g, ' ') : null };

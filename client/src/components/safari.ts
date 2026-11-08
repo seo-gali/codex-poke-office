@@ -26,16 +26,16 @@ export const safariMaps: SafariMap[] = [
     blocked: [[40, 72, 25, 28], [75, 72, 25, 28], [0, 72, 25, 28], [67, 47, 33, 23], [76, 0, 24, 12]], spots: points([22, 28], [73, 23], [66, 58], [47, 52], [32, 67], [60, 40], [15, 49], [70, 38]) },
 ];
 export const mapImage = (map: SafariMap) => `/maps/${map.id}.png`;
-export const mapFor = (session: Pick<SessionView, 'sessionId'>) => parseInt(session.sessionId.slice(-8), 16) % safariMaps.length;
+export const mapFor = (session: Pick<SessionView, 'sessionId'>, areaCount: number) => parseInt(session.sessionId.slice(-8), 16) % areaCount;
 export function walkable(map: SafariMap, point: Point) {
   // shortcut: 스크린샷 지형의 사각형 충돌, 정밀한 지형 이동이 필요할 때 타일 충돌로 교체
   return point.x >= 4 && point.x <= 96 && point.y >= 8 && point.y <= 92 && !map.blocked.some(([x, y, width, height]) => point.x >= x && point.x <= x + width && point.y >= y && point.y <= y + height);
 }
 export const distance = (a: Point, b: Point) => Math.hypot((a.x - b.x) * 4 / 3, a.y - b.y);
-export function symbols(sessions: SessionView[], map: SafariMap) {
+export function symbols(sessions: SessionView[], map: SafariMap, areaCount: number) {
   const index = safariMaps.indexOf(map);
   const reserved: Point[] = [];
-  return sessions.filter(s => mapFor(s) === index).map(session => {
+  return sessions.filter(s => mapFor(s, areaCount) === index).map(session => {
     const candidates = [...map.spots];
     for (let y = 15; y <= 85; y += 14) for (let x = 12; x <= 90; x += 16) candidates.push({ x, y });
     const point = candidates.find(p => walkable(map, p) && reserved.every(other => distance(other, p) > 12));

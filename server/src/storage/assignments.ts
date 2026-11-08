@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomInt } from 'node:crypto';
 import { validId } from '../codex/parse.ts';
-import { trainers } from '../../../shared/trainers.ts';
+import { pokemonCandidates, trainers } from '../../../shared/trainers.ts';
 import type { TrainerId } from '../../../shared/trainers.ts';
 
 export async function loadJson(file: string): Promise<Record<string, unknown>> {
@@ -27,8 +27,9 @@ export async function assignments(directory: string) {
   for (const [id, value] of Object.entries(stored)) {
     if (!validId(id)) throw new Error('포켓몬 배정 파일이 올바르지 않습니다');
     if (typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 1025) {
-      values[id] = value <= 151 ? { red: value } : value >= 252 && value <= 386 ? { brendan: value } : {};
-    } else if (value && typeof value === 'object' && !Array.isArray(value) && Object.entries(value).every(([key, number]) => Object.hasOwn(trainers, key) && Number.isInteger(number) && Number(number) >= trainers[key as TrainerId].first && Number(number) <= trainers[key as TrainerId].last)) {
+      const character = (Object.keys(trainers) as TrainerId[]).find(character => pokemonCandidates(character).includes(value));
+      values[id] = character ? { [character]: value } : {};
+    } else if (value && typeof value === 'object' && !Array.isArray(value) && Object.entries(value).every(([key, number]) => Object.hasOwn(trainers, key) && typeof number === 'number' && pokemonCandidates(key as TrainerId).includes(number))) {
       values[id] = value;
     } else throw new Error('포켓몬 배정 파일이 올바르지 않습니다');
   }
@@ -37,8 +38,7 @@ export async function assignments(directory: string) {
     if (!Object.hasOwn(trainers, character)) throw new Error('캐릭터가 올바르지 않습니다');
     const previous = values[sessionId] ?? {};
     if (!previous[character]) {
-      const { first, last } = trainers[character];
-      const candidates = Array.from({ length: last - first + 1 }, (_, i) => first + i).filter(id => !Object.values(previous).includes(id));
+      const candidates = pokemonCandidates(character).filter(id => !Object.values(previous).includes(id));
       const next = { ...previous, [character]: candidates[randomInt(candidates.length)] };
       await saveJson(file, { ...values, [sessionId]: next });
       values[sessionId] = next;

@@ -8,7 +8,7 @@ import { mkdtemp, mkdir, writeFile, appendFile, readFile, utimes, open, access }
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { Snapshot, SessionView } from '../shared/session.ts';
-import { trainers } from '../shared/trainers.ts';
+import { trainers, pokemonCandidates } from '../shared/trainers.ts';
 import type { TrainerId } from '../shared/trainers.ts';
 import { releaseFiles } from '../server/src/codex/usage.ts';
 
@@ -126,11 +126,12 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
     for (const character of Object.keys(trainers) as TrainerId[]) {
       const choice = session.pokemon[character], range = trainers[character];
       assert.ok(choice.id >= range.first && choice.id <= range.last);
+      assert.ok(pokemonCandidates(character).includes(choice.id));
       assert.match(choice.spriteUrl!, /\/animated\/\d+\.gif$/);
       assert.deepEqual(choice.types, ['노말']);
       assert.equal(choice.description, '합성 도감 설명');
     }
-    assert.equal(new Set(Object.values(session.pokemon).map(p => p.id)).size, 4);
+    assert.equal(new Set(Object.values(session.pokemon).map(p => p.id)).size, Object.keys(trainers).length);
   }
   assert.equal(raw.sessions.find(s => s.sessionId === ids[1])!.pokemon.red.id, 25);
   assert.ok(!Object.values(raw.sessions.find(s => s.sessionId === ids[0])!.pokemon).some(p => p.id === 1007));

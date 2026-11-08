@@ -33,7 +33,7 @@ export async function assignments(directory: string) {
       values[id] = value;
     } else throw new Error('포켓몬 배정 파일이 올바르지 않습니다');
   }
-  return async (sessionId: string, character: TrainerId) => {
+  const get = async (sessionId: string, character: TrainerId) => {
     if (!validId(sessionId)) throw new Error('세션 ID가 올바르지 않습니다');
     if (!Object.hasOwn(trainers, character)) throw new Error('캐릭터가 올바르지 않습니다');
     const previous = values[sessionId] ?? {};
@@ -45,4 +45,20 @@ export async function assignments(directory: string) {
     }
     return values[sessionId][character]!;
   };
+  const shuffle = async (sessionIds: string[], character: TrainerId) => {
+    if (!Object.hasOwn(trainers, character) || sessionIds.some(id => !validId(id))) throw new Error('재배정 대상이 올바르지 않습니다');
+    const used = new Set<number>(), next = { ...values };
+    for (const id of sessionIds) {
+      const previous = values[id] ?? {};
+      const candidates = () => pokemonCandidates(character).filter(number => !used.has(number) && !Object.values(previous).includes(number));
+      let available = candidates();
+      if (!available.length) { used.clear(); available = candidates(); }
+      const number = available[randomInt(available.length)];
+      next[id] = { ...previous, [character]: number };
+      used.add(number);
+    }
+    await saveJson(file, next);
+    Object.assign(values, next);
+  };
+  return { get, shuffle };
 }

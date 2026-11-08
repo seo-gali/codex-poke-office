@@ -21,7 +21,7 @@ const clients = new Set<ServerResponse>();
 let snapshot: Snapshot = { sessions: [], error: null };
 let encoded = JSON.stringify(snapshot);
 let stopping = false;
-let releasing = false;
+let updating = false;
 let currentScan: Promise<void> | null = null;
 async function scan() {
   const sessions: SessionRecord[] = [];
@@ -40,7 +40,7 @@ async function scan() {
       if (existing) sessions.splice(sessions.indexOf(existing), 1);
       const choices = {} as Record<TrainerId, Pokemon>;
       for (const character of Object.keys(trainers) as TrainerId[]) {
-        const id = await assign(state.sessionId, character);
+        const id = await assign.get(state.sessionId, character);
         choices[character] = { id, name: `포켓몬 #${id}`, spriteUrl: null, types: [], description: null };
       }
       sessions.push({
@@ -49,7 +49,7 @@ async function scan() {
         lastObservedAt: state.lastObservedAt, lastFileModifiedAt: info.mtime.toISOString(),
         observation: state.malformed || state.pending.length || !state.lastObservedAt ? 'unknown' : state.complete ? 'turn-complete' :
           Date.now() - Date.parse(state.lastObservedAt) <= 60000 ? 'recent-event' : 'quiet',
-        usage: 'unknown',
+        usage: 'unknown', activity: { ...state.activity },
       });
     }
     // shortcut: 초기 버전은 전체 폴더 재탐색, 실제 탐색 지연이 발생할 때 디렉터리 감시로 교체
@@ -67,7 +67,7 @@ async function scan() {
 function scheduleScan() {
   currentScan = scan().finally(() => {
     currentScan = null;
-    if (!stopping && !releasing) timer = setTimeout(scheduleScan, config.interval);
+    if (!stopping && !updating) timer = setTimeout(scheduleScan, config.interval);
   });
 }
 
@@ -80,25 +80,30 @@ const server = createServer(async (request, response) => {
     response.writeHead(403).end(); return;
   }
   const path = new URL(request.url ?? '/', `http://${config.host}`).pathname;
-  if (request.method === 'DELETE' && path.startsWith('/api/sessions/')) {
-    const id = path.slice('/api/sessions/'.length);
-    if (!validId(id) || request.headers['x-confirm-session'] !== id || ![...allowedHosts].some(h => request.headers.origin === `http://${h}`)) { response.writeHead(403).end(); return; }
-    if (releasing) { response.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' }).end(JSON.stringify({ error: '다른 기록을 처리하고 있습니다. 잠시 후 다시 시도해주세요.' })); return; }
-    releasing = true;
+  const shuffle = request.method === 'POST' && /^\/api\/trainers\/[^/]+\/shuffle$/.test(path);
+  if (shuffle || request.method === 'DELETE' && path.startsWith('/api/sessions/')) {
+    const id = shuffle ? path.split('/')[3] : path.slice('/api/sessions/'.length);
+    const valid = shuffle ? Object.hasOwn(trainers, id) && request.headers['x-shuffle-trainer'] === id : validId(id) && request.headers['x-confirm-session'] === id;
+    if (!valid || ![...allowedHosts].some(h => request.headers.origin === `http://${h}`)) { response.writeHead(403).end(); return; }
+    if (updating) { response.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' }).end(JSON.stringify({ error: '다른 기록을 처리하고 있습니다. 잠시 후 다시 시도해주세요.' })); return; }
+    updating = true;
     clearTimeout(timer);
     try {
       await currentScan;
-      const session = snapshot.sessions.find(s => s.sessionId === id);
-      if (!session || session.usage !== 'inactive') throw new Error('사용 안 함으로 확인된 세션만 놓아줄 수 있습니다.');
-      const files = [...logs].filter(([, state]) => state.sessionId === id).map(([file]) => ({ file, sessionId: id }));
-      await releaseFiles(config.sessions, files);
-      for (const entry of files) logs.delete(entry.file);
+      if (shuffle) await assign.shuffle(snapshot.sessions.map(s => s.sessionId), id as TrainerId);
+      else {
+        const session = snapshot.sessions.find(s => s.sessionId === id);
+        if (!session || session.usage !== 'inactive') throw new Error('사용 안 함으로 확인된 세션만 놓아줄 수 있습니다.');
+        const files = [...logs].filter(([, state]) => state.sessionId === id).map(([file]) => ({ file, sessionId: id }));
+        await releaseFiles(config.sessions, files);
+        for (const entry of files) logs.delete(entry.file);
+      }
       await scan();
-      response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' }).end(JSON.stringify({ ok: true }));
+      response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' }).end(shuffle ? encoded : JSON.stringify({ ok: true }));
     } catch (error) {
-      response.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' }).end(JSON.stringify({ error: (error as Error).message }));
+      response.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' }).end(JSON.stringify({ error: shuffle ? '포켓몬을 새로 배정하지 못했습니다. 로컬 저장 파일을 확인해주세요.' : (error as Error).message }));
     } finally {
-      releasing = false;
+      updating = false;
       if (!stopping) timer = setTimeout(scheduleScan, config.interval);
     }
     return;
@@ -115,7 +120,7 @@ const server = createServer(async (request, response) => {
     response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     response.end(path === '/api/sessions' ? encoded : JSON.stringify({ ok: !snapshot.error, error: snapshot.error })); return;
   }
-  const asset = path === '/' ? 'index.html' : /^\/assets\/[\w.-]+\.(js|css)$/.test(path) || /^\/maps\/(forest|wetland|desert|peak|rockybeach|savannah)\.png$/.test(path) ? path.slice(1) : null;
+  const asset = path === '/' ? 'index.html' : /^\/assets\/[\w.-]+\.(js|css)$/.test(path) || /^\/lab\/(floor|wall|desk|monitor|keyboard|bookshelf|cabinet|sink|board|window|clock)\.png$/.test(path) ? path.slice(1) : null;
   if (!asset) { response.writeHead(404).end(); return; }
   try {
     const content = await readFile(resolve('dist', asset));

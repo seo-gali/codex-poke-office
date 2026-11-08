@@ -17,6 +17,7 @@ export interface SessionRecord {
   lastFileModifiedAt: string | null;
   observation: 'recent-event' | 'turn-complete' | 'quiet' | 'unknown';
   usage: 'active' | 'inactive' | 'unknown';
+  activity: { kind: 'unknown' | 'started' | 'tool' | 'result' | 'message' | 'complete' | 'aborted'; label: string; at: string | null; toolCalls: number };
 }
 
 export type SessionView = Omit<SessionRecord, 'pokemon'> & { pokemon: Pokemon };

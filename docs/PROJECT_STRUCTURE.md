@@ -24,7 +24,7 @@ codex-poke-office/
 ├── client/                       # React · Vite · TypeScript
 │   └── src/
 │       ├── app/                  # 앱 진입점·상태 연결
-│       ├── components/           # 사파리·이동·고정 심볼·인카운터·삭제 확인
+│       ├── components/           # 연구 캠프·트레이너·인카운터·삭제 확인
 │       └── styles/               # 전역 스타일·디자인 토큰
 ├── server/                       # Node.js · TypeScript
 │   └── src/
@@ -62,6 +62,7 @@ shared ──> client, server (타입 정의만)
 - `GET /api/sessions` — `{ sessions: SessionView[], error: string | null }` 조회
 - `GET /api/events` — 같은 응답의 변경 알림 SSE, 최초 연결 시 현재 상태 전달
 - `DELETE /api/sessions/:sessionId` — 동일 Origin과 `X-Confirm-Session` 헤더 확인, 미사용 세션 JSONL 삭제. 성공 `{ ok: true }`, 사용 중·확인 불가·검증 실패는 409
+- `POST /api/trainers/:trainer/shuffle` — 동일 Origin과 `X-Shuffle-Trainer` 확인, 현재 세션의 해당 캐릭터 포켓몬을 재배정하고 최신 Snapshot 반환. 원본 Codex 기록은 변경하지 않음
 
 `health`는 `{ ok: boolean, error: string | null }`을 반환합니다. 세션 읽기 문제가 있을 때에도 정제된 나머지 세션은 계속 전달합니다.
 
@@ -83,10 +84,11 @@ interface SessionRecord {
   lastFileModifiedAt: string | null;
   observation: 'recent-event' | 'turn-complete' | 'quiet' | 'unknown';
   usage: 'active' | 'inactive' | 'unknown';
+  activity: { kind: string; label: string; at: string | null; toolCalls: number };
 }
 ```
 
-`observation`은 실제 프로세스 실행 상태가 아니라 관측 결과입니다. API는 캐릭터별 포켓몬을 전달하고 프런트엔드는 선택한 캐릭터의 `pokemon` 하나를 `SessionView`로 표시합니다. 배정 ID는 API 장애에도 유지하며, 조회 실패 시 `name`은 `포켓몬 #번호`, `spriteUrl`은 `null`입니다. 확정 타입은 `shared/session.ts`, `TrainerId`·13개 캐릭터·세대별 GIF 후보는 `shared/trainers.ts`를 기준으로 합니다. 열린 에리어 개수는 브라우저에 저장하고 `safari.ts`가 그 개수 안에서만 세션을 분산합니다.
+`observation`은 실제 프로세스 실행 상태가 아니라 관측 결과입니다. `activity`는 로그에서 확인한 종류·정해진 문구·시각·도구 호출 수만 포함합니다. API는 캐릭터별 포켓몬을 전달하고 프런트엔드는 선택한 캐릭터의 `pokemon` 하나를 `SessionView`로 표시합니다. 캐릭터 선택 변경 시 재배정하고 일반 갱신·새로고침에서는 마지막 배정을 유지합니다. 조회 실패 시 `name`은 `포켓몬 #번호`, `spriteUrl`은 `null`입니다. 확정 타입은 `shared/session.ts`, `TrainerId`·15개 캐릭터·세대별 GIF 후보는 `shared/trainers.ts`를 기준으로 합니다.
 
 ## 구현 파일
 
@@ -94,10 +96,9 @@ API·SSE·탐색 주기는 `server/src/index.ts`에서 연결하며, 별도 라�
 
 ```text
 client/src/main.tsx
-client/public/maps/               # 새로 제작한 인물 없는 6개 도트 지형
+client/public/lab/                # 공개 연구실 도트·제작자 이용 조건
 client/src/app/App.tsx
-client/src/components/HabitatScene.tsx
-client/src/components/safari.ts
+client/src/components/ResearchCamp.tsx
 client/src/components/Trainer.tsx
 client/src/components/PokemonAgent.tsx
 client/src/components/SessionDetails.tsx
@@ -115,8 +116,7 @@ shared/session.ts
 shared/trainers.ts
 tests/sessions.test.ts
 tests/browser-fixture.ts
-tests/safari.browser.js
-docs/map-prompts.json
+tests/camp.browser.js
 vite.config.ts
 tsconfig.json
 package.json

@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import type { Server } from 'node:http';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, mkdir, writeFile, appendFile, readFile, utimes, open, access } from 'node:fs/promises';
+import { mkdtemp, mkdir, rmdir, writeFile, appendFile, readFile, utimes, open, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { Snapshot, SessionView } from '../shared/session.ts';
@@ -85,7 +85,12 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
   assert.match(initial.sessions[0].pokemon.name, /^포켓몬 #\d+$/);
   assert.ok(requested > 0, 'API 장애 요청 미실행');
   const before = Object.fromEntries(initial.sessions.map(s => [s.sessionId, s.pokemon.id]));
-  assert.deepEqual(Object.keys(initial.sessions[0]).sort(), ['sessionId', 'shortId', 'projectName', 'pokemon', 'lastObservedAt', 'lastFileModifiedAt', 'observation', 'usage'].sort());
+  assert.deepEqual(Object.keys(initial.sessions[0]).sort(), ['sessionId', 'shortId', 'projectName', 'pokemon', 'lastObservedAt', 'lastFileModifiedAt', 'observation', 'usage', 'activity'].sort());
+  await appendFile(firstFile, record('response_item', { type: 'custom_tool_call', name: 'exec', input: secretMarker }));
+  await until(async () => (await snapshot()).sessions.find(s => s.sessionId === ids[0])?.activity.toolCalls === 1, '도구 호출 집계 실패');
+  assert.equal((await snapshot()).sessions.find(s => s.sessionId === ids[0])!.activity.label, '도구 호출');
+  await appendFile(firstFile, record('response_item', { type: 'custom_tool_call_output', output: secretMarker }));
+  await until(async () => (await snapshot()).sessions.find(s => s.sessionId === ids[0])?.activity.kind === 'result', '도구 결과 반영 실패');
   const partial = record('event_msg', { type: 'task_complete' });
   await appendFile(firstFile, partial.slice(0, 15));
   await until(async () => (await snapshot()).sessions.find(s => s.sessionId === ids[0])?.observation === 'unknown', '부분 JSONL 상태 확인 실패');
@@ -135,6 +140,31 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
   }
   assert.equal(raw.sessions.find(s => s.sessionId === ids[1])!.pokemon.red.id, 25);
   assert.ok(!Object.values(raw.sessions.find(s => s.sessionId === ids[0])!.pokemon).some(p => p.id === 1007));
+  const shuffle = (character: string, origin = base, confirmed = true) => fetch(`${base}/api/trainers/${character}/shuffle`, { method: 'POST', headers: { Origin: origin, ...(confirmed ? { 'X-Shuffle-Trainer': character } : {}) } });
+  assert.equal((await shuffle('elio', 'https://untrusted.example')).status, 403);
+  assert.equal((await shuffle('elio', base, false)).status, 403);
+  assert.equal((await shuffle('unknown')).status, 403);
+  const blockedSave = join(directory, 'data', 'assignments.json.tmp');
+  await mkdir(blockedSave);
+  try {
+    const failed = await shuffle('elio'); assert.equal(failed.status, 409);
+    const errorBody = await failed.text();
+    assert.ok(!errorBody.includes(directory) && !errorBody.includes('assignments.json.tmp'), '저장 오류가 원본 경로를 노출함');
+    assert.deepEqual((await (await fetch(`${base}/api/sessions`)).json()).sessions.map((s: Snapshot['sessions'][number]) => s.pokemon.elio.id), raw.sessions.map(s => s.pokemon.elio.id));
+  } finally { await rmdir(blockedSave); }
+  const changed = await shuffle('elio'); assert.equal(changed.status, 200);
+  const shuffled: Snapshot = await changed.json();
+  assert.equal(new Set(shuffled.sessions.map(s => s.pokemon.elio.id)).size, 3);
+  for (const session of shuffled.sessions) {
+    const previous = raw.sessions.find(s => s.sessionId === session.sessionId)!;
+    assert.notEqual(session.pokemon.elio.id, previous.pokemon.elio.id);
+    assert.ok(pokemonCandidates('elio').includes(session.pokemon.elio.id));
+    for (const character of Object.keys(trainers) as TrainerId[]) if (character !== 'elio') assert.equal(session.pokemon[character].id, previous.pokemon[character].id);
+  }
+  const oldChild = child; oldChild.kill(); await once(oldChild, 'exit'); child = start();
+  await until(async () => { try { return (await snapshot()).sessions.length === 3; } catch { return false; } }, '재배정 후 재시작 실패');
+  const restored: Snapshot = await (await fetch(`${base}/api/sessions`)).json();
+  assert.deepEqual(restored.sessions.map(s => s.pokemon.elio.id), shuffled.sessions.map(s => s.pokemon.elio.id));
   const cache = await readFile(join(directory, 'data', 'pokemon-cache.json'), 'utf8');
   assert.ok(!cache.includes(secretMarker));
   if (process.platform === 'win32') {

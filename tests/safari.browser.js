@@ -21,6 +21,42 @@ async (page) => {
   check(await page.locator('h1').textContent() === 'Codex Poké Office', '화면 제목 불일치');
   check(await page.locator('.page-heading p').count() === 0, '제목 부제가 남음');
   check(await page.getByRole('combobox', { name: '캐릭터 선택' }).locator('option').count() === 13, '캐릭터 추가 누락');
+  const poses = [];
+  const walkingCharacters = [['ethan', '심향'], ['kris', '크리스'], ['lucas', '광휘'], ['hilbert', '투지'], ['hilda', '투희'], ['calem', '칼름'], ['serena', '세레나'], ['victor', '승재'], ['gloria', '우리']];
+  for (const [character, name] of walkingCharacters) {
+    await page.getByRole('combobox', { name: '캐릭터 선택' }).selectOption(character);
+    await page.waitForFunction(name => document.querySelector(`.player [aria-label="내 트레이너 · ${name}"] img`)?.naturalWidth === 96, name);
+    const palette = await page.locator('.player img').evaluate(image => {
+      const canvas = document.createElement('canvas'); canvas.width = 32; canvas.height = 32;
+      const context = canvas.getContext('2d'); context.drawImage(image, 0, 0);
+      const data = context.getImageData(0, 0, 32, 32).data, colors = new Set();
+      for (let i = 0; i < data.length; i += 4) if (data[i + 3]) colors.add(`${data[i]},${data[i + 1]},${data[i + 2]}`);
+      return { colors: colors.size, transparent: data[3] === 0, height: image.naturalHeight };
+    });
+    check(palette.colors >= 12 && palette.transparent && palette.height === 128, `${name} 컬러 도트 또는 투명도 오류`);
+    await page.locator('.safari-view').focus();
+    for (const [key, row, axis, sign] of [['ArrowLeft', 3, 'left', -1], ['ArrowRight', 2, 'left', 1], ['ArrowUp', 1, 'top', -1], ['ArrowDown', 0, 'top', 1]]) {
+      const start = await page.locator('.player').evaluate((player, axis) => parseFloat(player.style[axis]), axis);
+      await page.keyboard.down(key);
+      await page.waitForFunction(row => {
+        const image = document.querySelector('.player img');
+        return parseFloat(image.style.top) === -row * 100 && parseFloat(image.style.left) < 0;
+      }, row);
+      const firstFrame = await page.locator('.player img').evaluate(image => image.style.left);
+      await page.waitForFunction(first => document.querySelector('.player img').style.left !== first, firstFrame);
+      await page.keyboard.up(key);
+      await page.waitForFunction(() => parseFloat(document.querySelector('.player img').style.left) === 0);
+      const end = await page.locator('.player').evaluate((player, axis) => parseFloat(player.style[axis]), axis);
+      check((end - start) * sign > 0, `${name} ${key} 좌표 이동 오류`);
+      poses.push({ name, key, html: await page.locator('.player .trainer').evaluate(trainer => trainer.outerHTML) });
+    }
+  }
+  const preview = await page.context().newPage();
+  await preview.setViewportSize({ width: 760, height: 1300 });
+  await preview.setContent(`<style>body{background:#a3ca8b;font:14px sans-serif;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.trainer-art{display:block;position:relative;overflow:hidden;width:96px;height:96px}.trainer-art img{position:absolute;max-width:none;image-rendering:pixelated}</style>${poses.map(pose => `<div>${pose.name} ${pose.key}${pose.html}</div>`).join('')}`);
+  await preview.screenshot({ path: 'data/trainers-directions-verified.png', fullPage: true });
+  await preview.close();
+  await page.reload(); await page.locator('.safari-symbol').first().waitFor();
   await page.getByRole('combobox', { name: '캐릭터 선택' }).selectOption('leaf');
   await page.waitForFunction(() => document.querySelector('.safari-symbol img')?.alt === '이상해씨');
   await page.getByRole('combobox', { name: '캐릭터 선택' }).selectOption('brendan');

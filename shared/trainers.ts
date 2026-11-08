@@ -1,17 +1,17 @@
 export const trainers = {
   red: {"name":"레드","generation":1,"first":1,"last":151,"walking":"red.png","backFrames":5,"source":"emerald"},
   leaf: {"name":"리프","generation":1,"first":1,"last":151,"walking":"leaf.png","backFrames":5,"source":"emerald"},
-  ethan: {"name":"심향","generation":2,"first":152,"last":251,"walking":"gold","backFrames":1,"source":"wilds"},
-  kris: {"name":"크리스","generation":2,"first":152,"last":251,"walking":"kris","backFrames":1,"source":"wilds"},
+  ethan: {"name":"심향","generation":2,"first":152,"last":251,"walking":"gold","backFrames":1,"source":"pokengine","overworld":"01f3plll"},
+  kris: {"name":"크리스","generation":2,"first":152,"last":251,"walking":"kris","backFrames":1,"source":"pokengine","overworld":"01xid4wg"},
   brendan: {"name":"휘웅","generation":3,"first":252,"last":386,"walking":"brendan/walking.png","backFrames":4,"source":"emerald"},
   may: {"name":"봄이","generation":3,"first":252,"last":386,"walking":"may/walking.png","backFrames":4,"source":"emerald"},
-  lucas: {"name":"광휘","generation":4,"first":387,"last":493,"walking":"lucas","backFrames":1,"source":"wilds"},
-  hilbert: {"name":"투지","generation":5,"first":494,"last":649,"walking":"hilbert","backFrames":1,"source":"wilds"},
-  hilda: {"name":"투희","generation":5,"first":494,"last":649,"walking":"hilda","backFrames":1,"source":"wilds"},
-  calem: {"name":"칼름","generation":6,"first":650,"last":721,"walking":"calem","backFrames":1,"source":"wilds"},
-  serena: {"name":"세레나","generation":6,"first":650,"last":721,"walking":"serena","backFrames":1,"source":"wilds"},
-  victor: {"name":"승재","generation":8,"first":810,"last":898,"walking":"victor","backFrames":1,"source":"wilds"},
-  gloria: {"name":"우리","generation":8,"first":810,"last":898,"walking":"gloria","backFrames":1,"source":"wilds"},
+  lucas: {"name":"광휘","generation":4,"first":387,"last":493,"walking":"lucas","backFrames":1,"source":"pokengine","overworld":"012pha2i"},
+  hilbert: {"name":"투지","generation":5,"first":494,"last":649,"walking":"hilbert","backFrames":1,"source":"pokengine","overworld":"0133xp9e"},
+  hilda: {"name":"투희","generation":5,"first":494,"last":649,"walking":"hilda","backFrames":1,"source":"pokengine","overworld":"01uhbo4g"},
+  calem: {"name":"칼름","generation":6,"first":650,"last":721,"walking":"calem","backFrames":1,"source":"pokengine","overworld":"01jw8ze2"},
+  serena: {"name":"세레나","generation":6,"first":650,"last":721,"walking":"serena","backFrames":1,"source":"pokengine","overworld":"014qszl8"},
+  victor: {"name":"승재","generation":8,"first":810,"last":898,"walking":"victor","backFrames":1,"source":"pokengine","overworld":"01p5eh81"},
+  gloria: {"name":"우리","generation":8,"first":810,"last":898,"walking":"gloria","backFrames":1,"source":"pokengine","overworld":"01arym2u"},
 } as const;
 export type TrainerId = keyof typeof trainers;
 

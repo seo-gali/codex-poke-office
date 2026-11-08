@@ -105,7 +105,7 @@ export function HabitatScene({ sessions, visibleIds, selected, onSelect, still, 
           onClick={() => onSelect(session.sessionId)}>
           <PokemonAgent pokemon={session.pokemon} still={still} /><span className="symbol-name">{session.pokemon.name}<i className={`usage-dot ${session.usage}`} /></span>
         </button>)}
-        <div className={`player ${trainers[trainer].source === 'wilds' ? 'player-square' : ''}`} style={{ left: `${player.x}%`, top: `${player.y}%` }} aria-label="플레이어 위치"><span className="player-label">나</span><Trainer direction={player.direction} walking={player.walking && !still} character={trainer} /></div>
+        <div className={`player ${trainers[trainer].source === 'pokengine' ? 'player-square' : ''}`} style={{ left: `${player.x}%`, top: `${player.y}%` }} aria-label="플레이어 위치"><span className="player-label">나</span><Trainer direction={player.direction} walking={player.walking && !still} character={trainer} /></div>
       </>}
       {!encounters.length && !mapFailed && <p className="empty map-empty">이 구역에는 표시할 세션 포켓몬이 없어요.<br /><small>다른 구역이나 표시 필터를 골라보세요.</small></p>}
     </div>

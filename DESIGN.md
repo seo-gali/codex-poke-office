@@ -57,7 +57,8 @@
 ## 4. 사파리 구성
 
 - 지형은 인물·포켓몬·UI가 없는 전용 도트 배경으로 교체합니다. AI로 새로 제작한 일반 지형만 로컬 맵 자산으로 저장하고 기존 게임 스크린샷을 제거합니다.
-- 플레이어 걷기·인카운터 뒷모습은 pret/pokeemerald와 PokeWilds 팬 스프라이트를 외부 로딩하고, 실패 시 직접 작성한 도트 트레이너로 표시합니다. 원본 시트의 프레임 배치와 비율에 맞춰 렌더링합니다.
+- 플레이어 걷기는 pret/pokeemerald·Pokéngine, 인카운터 뒷모습은 pret/pokeemerald·PokeWilds 팬 스프라이트를 외부 로딩하고, 실패 시 직접 작성한 도트 트레이너로 표시합니다. 원본 시트의 프레임 배치와 비율에 맞춰 렌더링합니다.
+- 캐릭터의 좌우 프레임은 실제 그림 방향에 맞춰 매핑하며 좌표 이동 방향과 일치해야 합니다. 16×16 GBC풍 걷기 그림은 사용자 제공 HGSS 계열 예시와 어울리는 다색 스프라이트로 교체합니다.
 - 맵에 미리 박힌 인물·포켓몬을 사용하지 않습니다. 이름표가 있는 고정 심볼만 세션입니다.
 - 나무·수면·절벽의 큰 장애물은 사각형 충돌로 막으며 정밀 타일 충돌은 구현하지 않습니다.
 - 포켓몬이 0마리인 구역도 맵과 빈 상태 메시지를 유지합니다.
@@ -164,6 +165,8 @@ HOME 렌더는 사용하지 않습니다. 지상 심볼과 인카운터는 제�
 - [직접 제작한 맵 프롬프트](./docs/map-prompts.json)
 - [도트 배틀 배경 · Pokémon Showdown](https://play.pokemonshowdown.com/fx/)
 - [트레이너 스프라이트 · pret/pokeemerald](https://github.com/pret/pokeemerald/tree/master/graphics/object_events/pics/people/brendan)
-- [추가 트레이너 · PokeWilds 및 제작자 크레딧](https://github.com/SheerSt/pokewilds/blob/main/README.md#player-sprites)
+- [추가 트레이너 걷기 · Pokéngine](https://pokengine.org/trainers): Jext, DiegoWT, Kyledove. 캐릭터별 출처·의뢰자 표기는 README에 기록합니다.
+- [추가 트레이너 인카운터 · PokeWilds 및 제작자 크레딧](https://github.com/SheerSt/pokewilds/blob/main/README.md#player-sprites)
+- [사용자 제공 정면 도트 참고 · 마삼](https://www.postype.com/@rudco-214/post/22967701): 스타일 참고용이며 걷기 이미지로 사용하지 않습니다.
 
 포켓몬 및 관련 캐릭터·시각 자산의 권리는 해당 권리자에게 있습니다. PokéAPI 사용 가능 여부와 포켓몬 자산의 상업적 이용 권한은 별개입니다.

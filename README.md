@@ -161,7 +161,25 @@ npm start
 
 기본 관리 대상은 `SESSION_LOOKBACK_HOURS=24` 이내 수정된 기록입니다. 더 오래된 기록을 보려면 기존 환경 변수의 시간을 늘립니다. 일괄 삭제와 전체 과거 기록 전용 화면은 추가하지 않았습니다.
 
-맵은 built-in `image_gen`으로 새로 만든 일반 도트 지형이며 `client/public/maps/`에 포함합니다. 이전 Serebii 게임 스크린샷은 제거했고 배경에 미리 그려진 사람·포켓몬·UI는 없습니다. 제작 프롬프트와 출력 경로는 [`docs/map-prompts.json`](./docs/map-prompts.json)에 기록합니다. 인카운터 배경은 [Pokémon Showdown](https://play.pokemonshowdown.com/fx/), 기존 트레이너는 [pret/pokeemerald](https://github.com/pret/pokeemerald/tree/master/graphics/object_events/pics/people/brendan), 추가 트레이너는 [PokeWilds 팬 스프라이트](https://github.com/SheerSt/pokewilds/tree/main/player)를 외부 로딩합니다. 추가 트레이너 제작자 표기는 [PokeWilds Player sprites 크레딧](https://github.com/SheerSt/pokewilds/blob/main/README.md#player-sprites)을 따릅니다. 포켓몬은 PokéAPI 도트 스프라이트를 외부 로딩합니다. 이 외부 자산 원본은 저장소·번들에 넣지 않으며 인터넷 연결이 필요합니다. HOME 렌더는 사용하지 않습니다.
+맵은 built-in `image_gen`으로 새로 만든 일반 도트 지형이며 `client/public/maps/`에 포함합니다. 이전 Serebii 게임 스크린샷은 제거했고 배경에 미리 그려진 사람·포켓몬·UI는 없습니다. 제작 프롬프트와 출력 경로는 [`docs/map-prompts.json`](./docs/map-prompts.json)에 기록합니다. 인카운터 배경은 [Pokémon Showdown](https://play.pokemonshowdown.com/fx/), 기존 트레이너는 [pret/pokeemerald](https://github.com/pret/pokeemerald/tree/master/graphics/object_events/pics/people/brendan)를 외부 로딩합니다. 추가 트레이너의 지도 걷기는 아래 Pokéngine 컬러 도트이며 인카운터 뒷모습은 [PokeWilds 팬 스프라이트](https://github.com/SheerSt/pokewilds/tree/main/player)를 사용합니다. 뒷모습 제작자는 [PokeWilds Player sprites 크레딧](https://github.com/SheerSt/pokewilds/blob/main/README.md#player-sprites)을 따릅니다. 포켓몬은 PokéAPI 도트 스프라이트를 외부 로딩합니다. 이 외부 자산 원본은 저장소·번들에 넣지 않으며 인터넷 연결이 필요합니다. HOME 렌더는 사용하지 않습니다.
+
+### 트레이너 출처
+
+추가 걷기 도트는 각 공개 페이지에서 `Free to use with credit`로 배포하는 32×32 프레임입니다. 모든 권리는 원 권리자·제작자에게 있습니다. [마삼의 포스타입 자료](https://www.postype.com/@rudco-214/post/22967701)는 정면 도트 스타일 참고용이며 앱에 복제하지 않았습니다.
+
+| 캐릭터 | 배포 페이지 · 배포자·제작 크레딧 |
+| --- | --- |
+| 심향 | [Pokéngine](https://pokengine.org/trainers/01f3plll/Ethan) · Jext |
+| 크리스 | [Pokéngine](https://pokengine.org/trainers/01xid4wg/Kris) · DiegoWT, Kyledove · Thewritingchild 의뢰 |
+| 광휘 | [Pokéngine](https://pokengine.org/trainers/012pha2i/Lucas) · Jext |
+| 투지 | [Pokéngine](https://pokengine.org/trainers/0133xp9e/Hilbert) · DiegoWT, Jext |
+| 투희 | [Pokéngine](https://pokengine.org/trainers/01uhbo4g/Hilda) · DiegoWT, Jext |
+| 칼름 | [Pokéngine](https://pokengine.org/trainers/01jw8ze2/Calem) · Kyledove |
+| 세레나 | [Pokéngine](https://pokengine.org/trainers/014qszl8/Serena) · Kyledove |
+| 승재 | [Pokéngine](https://pokengine.org/trainers/01p5eh81/Victor) · DiegoWT, Kyledove · Gavin Torem 의뢰 |
+| 우리 | [Pokéngine](https://pokengine.org/trainers/01arym2u/Gloria) · DiegoWT, Kyledove · Gavin Torem 의뢰 |
+
+### 실제 확인 결과
 
 2026-11-07 직접 확인한 결과:
 
@@ -190,6 +208,8 @@ npm start
 현재 충돌은 큰 장애물을 사각형으로 처리하며 정밀 타일 충돌은 구현하지 않았습니다. 실제 `codex resume`과 새 Codex 프로세스 실행은 기존 프로세스를 조작하지 않는 조건에 따라 수행하지 않았습니다.
 
 2026-11-08 단일 맵·캐릭터 확장 검증에서는 실제 세션 4개가 처음 열린 숲에 모두 표시됐습니다. 13명 모두 걷기·인카운터 이미지가 정상 표시되고 세대별 배정이 전부 GIF인 것을 확인했습니다. 합성 세션 3개로 에리어를 1개씩 추가해 6개에서 멈추고, 추가 중 세션 수 합계가 유지되며 새로고침 후 열린 개수가 보존되는 것을 확인했습니다. 1–6개 에리어와 4개 화면 크기 조합 24개에서 페이지·카드 넘침이 없었습니다. `npm run check`, `npm test`, `npm run build`와 확장한 브라우저 시나리오가 통과했습니다. 화면은 `data/single-area-start.png`, `data/generation-eight-encounter.png`, `data/progressive-개수-너비.png`에 있습니다(Git 제외).
+
+2026-11-09 걷기 도트 교체 검증에서는 추가 캐릭터 9종의 32×32 컬러 프레임·투명 배경을 확인했습니다. 합성 브라우저에서 9종 × 4방향의 좌표 이동·그림 방향·두 걷기 프레임 전환·정지 자세를 모두 확인했으며, 기존 선택 저장·인카운터·도감·반응형·놓아주기 시나리오도 통과했습니다. 실제 세션 5개가 표시되는 화면에서 크리스의 네 방향 이동과 390×844 화면 맞춤을 확인했습니다. `npm run check`, `npm run build`, `npm test`가 모두 종료 코드 0으로 통과했습니다. 검증 화면은 `data/trainers-directions-verified.png`, `data/trainer-real-desktop.png`, `data/trainer-real-mobile.png`에 있습니다(Git 제외). 실제 원본 세션 삭제와 실물 휴대기기 검증은 수행하지 않았습니다.
 
 ## 초기 버전에서 확인한 결과
 

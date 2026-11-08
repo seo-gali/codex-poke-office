@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 
-export const trainers = { brendan: '휘웅', may: '봄이' } as const;
-export type TrainerId = keyof typeof trainers;
+import { trainers } from '../../../shared/trainers.ts';
+import type { TrainerId } from '../../../shared/trainers.ts';
 const spriteSheets = new Map<string, Promise<string>>();
 function transparentSheet(url: string) {
   if (!spriteSheets.has(url)) spriteSheets.set(url, new Promise((resolve, reject) => {
@@ -36,7 +36,7 @@ function transparentSheet(url: string) {
 export function Trainer({ direction = 'down', walking = false, battle = false, character = 'brendan' }: { direction?: string; walking?: boolean; battle?: boolean; character?: TrainerId }) {
   const [sheet, setSheet] = useState<{ url: string; source: string | null }>({ url: '', source: null });
   const [step, setStep] = useState(0);
-  const url = `https://raw.githubusercontent.com/pret/pokeemerald/master/graphics/${battle ? `trainers/back_pics/${character}.png` : `object_events/pics/people/${character}/walking.png`}`;
+  const url = `https://raw.githubusercontent.com/pret/pokeemerald/master/graphics/${battle ? `trainers/back_pics/${character}.png` : `object_events/pics/people/${trainers[character].walking}`}`;
   useEffect(() => {
     let current = true;
     transparentSheet(url).then(source => { if (current) setSheet({ url, source }); }, () => { if (current) setSheet({ url, source: null }); });
@@ -49,9 +49,9 @@ export function Trainer({ direction = 'down', walking = false, battle = false, c
   }, [walking]);
   const facing = direction === 'up' ? 1 : direction === 'left' || direction === 'right' ? 2 : 0;
   const frame = walking ? [3, 5, 7][facing] + step : facing;
-  if (sheet.url === url && sheet.source) return <span className={`trainer trainer-art ${walking ? 'walking' : ''}`} role="img" aria-label={`내 트레이너 · ${trainers[character]}`} style={{ transform: direction === 'right' ? 'scaleX(-1)' : undefined }}>
+  if (sheet.url === url && sheet.source) return <span className={`trainer trainer-art ${walking ? 'walking' : ''}`} role="img" aria-label={`내 트레이너 · ${trainers[character].name}`} style={{ transform: direction === 'right' ? 'scaleX(-1)' : undefined }}>
     <img src={sheet.source} alt="" referrerPolicy="no-referrer"
-      style={(battle ? { width: '100%', height: '400%', left: 0, top: 0 } : { width: '900%', height: '100%', left: `${-frame * 100}%`, top: 0 }) as CSSProperties} />
+      style={(battle ? { width: '100%', height: `${trainers[character].backFrames * 100}%`, left: 0, top: 0 } : { width: '900%', height: '100%', left: `${-frame * 100}%`, top: 0 }) as CSSProperties} />
   </span>;
   const back = direction === 'up';
   return <svg className={`trainer ${walking ? 'walking' : ''}`} viewBox="0 0 16 24" shapeRendering="crispEdges" aria-label="내 트레이너" role="img" style={{ transform: direction === 'left' ? 'scaleX(-1)' : undefined }}>

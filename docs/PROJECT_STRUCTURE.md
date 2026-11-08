@@ -68,15 +68,17 @@ shared ──> client, server (타입 정의만)
 응답 모델은 반드시 다음 정보로 제한합니다.
 
 ```typescript
-interface SessionView {
+interface SessionRecord {
   sessionId: string;
   shortId: string;
   projectName: string | null;
-  pokemon: {
+  pokemon: Record<'red' | 'leaf' | 'brendan' | 'may', {
     id: number;
     name: string;
     spriteUrl: string | null;
-  };
+    types: string[];
+    description: string | null;
+  }>;
   lastObservedAt: string | null;
   lastFileModifiedAt: string | null;
   observation: 'recent-event' | 'turn-complete' | 'quiet' | 'unknown';
@@ -84,7 +86,7 @@ interface SessionView {
 }
 ```
 
-`observation`은 실제 프로세스 실행 상태가 아니라 관측 결과입니다. 배정 ID는 API 장애에도 유지하며, 조회 실패 시 `name`은 `포켓몬 #번호`, `spriteUrl`은 `null`입니다. 확정 타입은 `shared/session.ts`를 기준으로 합니다.
+`observation`은 실제 프로세스 실행 상태가 아니라 관측 결과입니다. API는 캐릭터별 포켓몬을 전달하고 프런트엔드는 선택한 캐릭터의 `pokemon` 하나를 `SessionView`로 표시합니다. 배정 ID는 API 장애에도 유지하며, 조회 실패 시 `name`은 `포켓몬 #번호`, `spriteUrl`은 `null`입니다. 확정 타입은 `shared/session.ts`, 캐릭터·세대 후보는 `shared/trainers.ts`를 기준으로 합니다.
 
 ## 구현 파일
 
@@ -110,6 +112,7 @@ server/src/codex/file-usage.ps1
 server/src/storage/assignments.ts
 server/src/storage/pokemon.ts
 shared/session.ts
+shared/trainers.ts
 tests/sessions.test.ts
 tests/browser-fixture.ts
 tests/safari.browser.js

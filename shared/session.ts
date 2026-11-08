@@ -1,21 +1,27 @@
+import type { TrainerId } from './trainers.ts';
+
 export interface Pokemon {
   id: number;
   name: string;
   spriteUrl: string | null;
+  types: string[];
+  description: string | null;
 }
 
-export interface SessionView {
+export interface SessionRecord {
   sessionId: string;
   shortId: string;
   projectName: string | null;
-  pokemon: Pokemon;
+  pokemon: Record<TrainerId, Pokemon>;
   lastObservedAt: string | null;
   lastFileModifiedAt: string | null;
   observation: 'recent-event' | 'turn-complete' | 'quiet' | 'unknown';
   usage: 'active' | 'inactive' | 'unknown';
 }
 
+export type SessionView = Omit<SessionRecord, 'pokemon'> & { pokemon: Pokemon };
+
 export interface Snapshot {
-  sessions: SessionView[];
+  sessions: SessionRecord[];
   error: string | null;
 }

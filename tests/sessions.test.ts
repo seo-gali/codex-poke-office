@@ -7,7 +7,9 @@ import { once } from 'node:events';
 import { mkdtemp, mkdir, writeFile, appendFile, readFile, utimes, open, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import type { Snapshot } from '../shared/session.ts';
+import type { Snapshot, SessionView } from '../shared/session.ts';
+import { trainers } from '../shared/trainers.ts';
+import type { TrainerId } from '../shared/trainers.ts';
 import { releaseFiles } from '../server/src/codex/usage.ts';
 
 async function listen(server: Server) {
@@ -34,6 +36,8 @@ function metadata(id: string) { return record('session_meta', { id, cwd: 'D:\\pr
 test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 재시작 및 비노출', { timeout: 60000 }, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'poke-office-e2e-'));
   const root = join(directory, 'codex', 'sessions', 'nested'); await mkdir(root, { recursive: true });
+  await mkdir(join(directory, 'data'));
+  await writeFile(join(directory, 'data', 'assignments.json'), JSON.stringify({ [ids[0]]: 1007, [ids[1]]: 25 }));
   const port = await freePort(), clientPort = await freePort();
   let apiFails = true, requested = 0;
   const mock = createServer((request, response) => {
@@ -42,7 +46,7 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
     if (apiFails) { response.writeHead(503).end(); return; }
     const id = Number(request.url!.split('/').at(-1));
     response.setHeader('Content-Type', 'application/json');
-    response.end(JSON.stringify(request.url!.startsWith('/pokemon-species/') ? { id, names: [{ language: { name: 'en' }, name: `test-${id}` }, { language: { name: 'ko' }, name: `테스트${id}` }], private: secretMarker } : { id, name: `test-${id}`, sprites: { front_default: null }, private: secretMarker }));
+    response.end(JSON.stringify(request.url!.startsWith('/pokemon-species/') ? { id, names: [{ language: { name: 'en' }, name: `test-${id}` }, { language: { name: 'ko' }, name: `테스트${id}` }], flavor_text_entries: [{ language: { name: 'ko' }, flavor_text: '합성 도감\n설명' }], private: secretMarker } : { id, name: `test-${id}`, sprites: { versions: { 'generation-v': { 'black-white': { animated: { front_default: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/${id}.gif` } } } } }, types: [{ type: { name: 'normal' } }], private: secretMarker }));
   });
   const apiPort = await listen(mock); t.after(() => { mock.closeAllConnections(); mock.close(); });
   let output = '';
@@ -56,7 +60,10 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
   }
   let child = start(); t.after(() => { child.kill(); });
   const base = `http://127.0.0.1:${port}`;
-  async function snapshot(): Promise<Snapshot> { return await (await fetch(`${base}/api/sessions`)).json(); }
+  async function snapshot(): Promise<{ sessions: SessionView[]; error: string | null }> {
+    const value: Snapshot = await (await fetch(`${base}/api/sessions`)).json();
+    return { ...value, sessions: value.sessions.map(session => ({ ...session, pokemon: session.pokemon.brendan })) };
+  }
   await until(async () => { try { return (await fetch(`${base}/api/health`)).ok; } catch { return false; } }, '서버 실행 실패');
   assert.equal((await snapshot()).sessions.length, 0);
   const streamController = new AbortController(); t.after(() => streamController.abort());
@@ -97,7 +104,7 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
   await writeFile(join(root, 'three.jsonl'), metadata(ids[2]));
   await until(async () => (await snapshot()).sessions.length === 3, '신규 세션/API 장애 처리 실패');
   const third = (await snapshot()).sessions.find(s => s.sessionId === ids[2])!;
-  assert.ok(third.pokemon.id >= 1 && third.pokemon.id <= 1025);
+  assert.ok(third.pokemon.id >= 252 && third.pokemon.id <= 386);
   await until(async () => received.includes(ids[2]), 'SSE 신규 세션 알림 누락');
   for (const content of [JSON.stringify(await snapshot()), received, await readFile(join(directory, 'data', 'assignments.json'), 'utf8')]) {
     assert.ok(!content.includes(secretMarker) && !content.includes('private-parent'), '원문 또는 전체 경로 노출');
@@ -108,13 +115,25 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
   child.kill(); await once(child, 'exit');
   apiFails = false;
   const mapping = JSON.parse(await readFile(join(directory, 'data', 'assignments.json'), 'utf8'));
-  const cachedId = mapping[ids[0]];
+  const cachedId = mapping[ids[0]].brendan;
   await writeFile(join(directory, 'data', 'pokemon-cache.json'), JSON.stringify({ [cachedId]: { id: cachedId, name: 'old-english-name', spriteUrl: null } }));
   child = start();
   await until(async () => { try { return (await snapshot()).sessions.length === 3; } catch { return false; } }, '재시작 실패');
-  for (const s of (await snapshot()).sessions) assert.equal(s.pokemon.id, mapping[s.sessionId]);
+  for (const s of (await snapshot()).sessions) assert.equal(s.pokemon.id, mapping[s.sessionId].brendan);
   for (const s of (await snapshot()).sessions) assert.equal(s.pokemon.name, `테스트${s.pokemon.id}`);
-  assert.equal((await snapshot()).sessions[0].pokemon.spriteUrl, null);
+  const raw: Snapshot = await (await fetch(`${base}/api/sessions`)).json();
+  for (const session of raw.sessions) {
+    for (const character of Object.keys(trainers) as TrainerId[]) {
+      const choice = session.pokemon[character], range = trainers[character];
+      assert.ok(choice.id >= range.first && choice.id <= range.last);
+      assert.match(choice.spriteUrl!, /\/animated\/\d+\.gif$/);
+      assert.deepEqual(choice.types, ['노말']);
+      assert.equal(choice.description, '합성 도감 설명');
+    }
+    assert.equal(new Set(Object.values(session.pokemon).map(p => p.id)).size, 4);
+  }
+  assert.equal(raw.sessions.find(s => s.sessionId === ids[1])!.pokemon.red.id, 25);
+  assert.ok(!Object.values(raw.sessions.find(s => s.sessionId === ids[0])!.pokemon).some(p => p.id === 1007));
   const cache = await readFile(join(directory, 'data', 'pokemon-cache.json'), 'utf8');
   assert.ok(!cache.includes(secretMarker));
   if (process.platform === 'win32') {

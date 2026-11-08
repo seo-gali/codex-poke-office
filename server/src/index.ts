@@ -10,7 +10,9 @@ import { assignments } from './storage/assignments.ts';
 import { pokemonCache } from './storage/pokemon.ts';
 import { usage, releaseFiles } from './codex/usage.ts';
 import { validId } from './codex/parse.ts';
-import type { Snapshot, SessionView } from '../../shared/session.ts';
+import type { Pokemon, Snapshot, SessionRecord } from '../../shared/session.ts';
+import { trainers } from '../../shared/trainers.ts';
+import type { TrainerId } from '../../shared/trainers.ts';
 
 const assign = await assignments(config.data);
 const pokemon = await pokemonCache(config.data, config.api);
@@ -22,7 +24,7 @@ let stopping = false;
 let releasing = false;
 let currentScan: Promise<void> | null = null;
 async function scan() {
-  const sessions: SessionView[] = [];
+  const sessions: SessionRecord[] = [];
   let error: string | null = null;
   try {
     const files = await discover(config.sessions, config.lookback);
@@ -36,10 +38,14 @@ async function scan() {
       const existing = sessions.find(s => s.sessionId === state!.sessionId);
       if (existing && Date.parse(existing.lastFileModifiedAt!) >= info.mtimeMs) continue;
       if (existing) sessions.splice(sessions.indexOf(existing), 1);
-      const id = await assign(state.sessionId);
+      const choices = {} as Record<TrainerId, Pokemon>;
+      for (const character of Object.keys(trainers) as TrainerId[]) {
+        const id = await assign(state.sessionId, character);
+        choices[character] = { id, name: `포켓몬 #${id}`, spriteUrl: null, types: [], description: null };
+      }
       sessions.push({
         sessionId: state.sessionId, shortId: `${state.sessionId.slice(0, 8)}…${state.sessionId.slice(-4)}`,
-        projectName: state.projectName, pokemon: { id, name: `포켓몬 #${id}`, spriteUrl: null },
+        projectName: state.projectName, pokemon: choices,
         lastObservedAt: state.lastObservedAt, lastFileModifiedAt: info.mtime.toISOString(),
         observation: state.malformed || state.pending.length || !state.lastObservedAt ? 'unknown' : state.complete ? 'turn-complete' :
           Date.now() - Date.parse(state.lastObservedAt) <= 60000 ? 'recent-event' : 'quiet',
@@ -47,7 +53,7 @@ async function scan() {
       });
     }
     // shortcut: 초기 버전은 전체 폴더 재탐색, 실제 탐색 지연이 발생할 때 디렉터리 감시로 교체
-    await Promise.all(sessions.map(async session => { session.pokemon = await pokemon(session.pokemon.id); }));
+    await Promise.all(sessions.flatMap(session => (Object.keys(trainers) as TrainerId[]).map(async character => { session.pokemon[character] = await pokemon(session.pokemon[character].id); })));
     const states = await usage([...logs].filter(([, state]) => state.sessionId).map(([file, state]) => ({ file, sessionId: state.sessionId! })));
     for (const session of sessions) session.usage = states.get(session.sessionId) ?? 'unknown';
   } catch { error = '로컬 세션 또는 저장 파일을 읽을 수 없습니다. CODEX_HOME과 data 폴더를 확인하세요.'; }

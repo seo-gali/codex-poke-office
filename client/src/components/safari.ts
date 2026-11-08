@@ -26,7 +26,7 @@ export const safariMaps: SafariMap[] = [
     blocked: [[40, 72, 25, 28], [75, 72, 25, 28], [0, 72, 25, 28], [67, 47, 33, 23], [76, 0, 24, 12]], spots: points([22, 28], [73, 23], [66, 58], [47, 52], [32, 67], [60, 40], [15, 49], [70, 38]) },
 ];
 export const mapImage = (map: SafariMap) => `/maps/${map.id}.png`;
-export const mapFor = (session: SessionView) => parseInt(session.sessionId.slice(-8), 16) % safariMaps.length;
+export const mapFor = (session: Pick<SessionView, 'sessionId'>) => parseInt(session.sessionId.slice(-8), 16) % safariMaps.length;
 export function walkable(map: SafariMap, point: Point) {
   // shortcut: 스크린샷 지형의 사각형 충돌, 정밀한 지형 이동이 필요할 때 타일 충돌로 교체
   return point.x >= 4 && point.x <= 96 && point.y >= 8 && point.y <= 92 && !map.blocked.some(([x, y, width, height]) => point.x >= x && point.x <= x + width && point.y >= y && point.y <= y + height);

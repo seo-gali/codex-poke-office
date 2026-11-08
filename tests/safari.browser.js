@@ -1,8 +1,9 @@
 async (page) => {
   const check = (value, message) => { if (!value) throw new Error(message); };
   check(new URL(page.url()).port === '4191', '합성 서버 4191에서만 삭제 검증을 실행합니다');
-  const snapshot = async () => (await (await page.request.get('http://127.0.0.1:4191/api/sessions')).json()).sessions;
+  const snapshot = async () => (await (await page.request.get('http://127.0.0.1:4191/api/sessions')).json()).sessions.map(session => ({ ...session, pokemon: session.pokemon.red }));
   await page.locator('.safari-symbol').first().waitFor();
+  await page.getByRole('combobox', { name: '캐릭터 선택' }).selectOption('red');
   const before = await snapshot();
   check(before.length === 1 && before[0].projectName === 'browser-check', '합성 기록만 허용합니다');
   check(before[0].pokemon.name === '피카츄', '한글 이름 누락');
@@ -14,6 +15,11 @@ async (page) => {
   check(await page.title() === 'Codex Poké Office', '제목 복원 실패');
   check(await page.locator('h1').textContent() === 'Codex Poké Office', '화면 제목 불일치');
   check(await page.locator('.page-heading p').count() === 0, '제목 부제가 남음');
+  check(await page.getByRole('combobox', { name: '캐릭터 선택' }).locator('option').count() === 4, '캐릭터 추가 누락');
+  await page.getByRole('combobox', { name: '캐릭터 선택' }).selectOption('leaf');
+  await page.waitForFunction(() => document.querySelector('.safari-symbol img')?.alt === '이상해씨');
+  await page.getByRole('combobox', { name: '캐릭터 선택' }).selectOption('brendan');
+  await page.waitForFunction(() => document.querySelector('.safari-symbol img')?.alt === '나무지기');
   await page.getByRole('combobox', { name: '캐릭터 선택' }).selectOption('may');
   await page.waitForFunction(() => document.querySelector('.player [aria-label="내 트레이너 · 봄이"] img')?.src.startsWith('data:'));
   const alpha = await page.locator('.player img').evaluate(image => {
@@ -27,9 +33,10 @@ async (page) => {
   check(await page.getByRole('combobox', { name: '캐릭터 선택' }).inputValue() === 'may', '캐릭터 선택 저장 실패');
   await page.locator('.safari-symbol').first().click();
   await page.locator('.encounter-dialog[open]').waitFor();
-  check(await page.locator('#encounter-title').textContent() === '피카츄', '원거리 클릭 실패');
+  check(await page.locator('#encounter-title').textContent() === '아차모', '원거리 클릭 또는 캐릭터별 전환 실패');
   check(await page.locator('.encounter-actions button').count() === 4, '네 칸 메뉴 누락');
   check(await page.locator('.encounter-info').count() === 0, '정보가 처음부터 펼쳐짐');
+  check(await page.getByRole('button', { name: '세션 ID 복사', exact: true }).count() === 0, 'ID 복사가 메뉴에 남음');
   await page.getByRole('button', { name: '정보 보기', exact: true }).click();
   check((await page.locator('.encounter-info').innerText()).includes(before[0].sessionId), '세션 정보 누락');
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'http://127.0.0.1:4191' });
@@ -37,6 +44,12 @@ async (page) => {
   check(await page.evaluate(() => navigator.clipboard.readText()) === before[0].sessionId, '세션 ID 복사 실패');
   await page.getByRole('button', { name: '정보 보기', exact: true }).click();
   check(await page.locator('.encounter-info').count() === 0, '정보 접기 실패');
+  await page.getByRole('button', { name: '도감 보기', exact: true }).click();
+  check((await page.locator('.pokedex-panel').innerText()).includes('No. 255'), '도감 번호 누락');
+  check((await page.locator('.pokedex-panel').innerText()).includes('불꽃'), '도감 타입 누락');
+  check((await page.locator('.pokedex-panel').innerText()).includes('합성 도감 설명'), '도감 설명 누락');
+  await page.getByRole('button', { name: '정보 보기', exact: true }).click();
+  check(await page.locator('.pokedex-panel').count() === 0, '정보와 도감이 동시에 펼쳐짐');
   await page.waitForFunction(() => document.querySelector('.encounter-trainer img')?.src.startsWith('data:'));
   const preserved = await page.locator('.encounter-trainer img').evaluate(async image => {
     const original = new Image(); original.crossOrigin = 'anonymous';
@@ -50,6 +63,12 @@ async (page) => {
   await page.getByRole('button', { name: '탐험으로 돌아가기', exact: true }).click();
   const position = await page.locator('.player').getAttribute('style');
   await page.getByRole('button', { name: '전체 맵', exact: true }).click();
+  check(await page.locator('.area-preview').count() === 6, '전체 에리어가 표시되지 않음');
+  await page.getByRole('button', { name: '늪지 에리어 탐험 · 0마리', exact: true }).click();
+  check(await page.locator('#habitat-title').textContent() === '늪지 에리어', '전체 맵 구역 이동 실패');
+  await page.getByRole('button', { name: '전체 맵', exact: true }).click();
+  await page.getByRole('button', { name: '숲 에리어 탐험 · 1마리', exact: true }).click();
+  await page.getByRole('button', { name: '구역 맞춤', exact: true }).click();
   check(await page.locator('output').textContent() === '100%', '전체 맵 배율 실패');
   const fullMap = await page.evaluate(() => {
     const image = document.querySelector('.safari-map-image').getBoundingClientRect();
@@ -79,7 +98,9 @@ async (page) => {
   await page.keyboard.down('ArrowLeft'); await page.waitForTimeout(800); await page.keyboard.up('ArrowLeft');
   check(start !== await page.locator('.player').getAttribute('style'), '플레이어 이동 실패');
   check(fixed === await page.locator('.safari-symbol').first().getAttribute('style'), '고정 심볼 위치 변경');
-  check(await page.getByRole('button', { name: 'E · 말 걸기', exact: true }).isEnabled(), '근접 판정 실패');
+  check(await page.getByRole('button', { name: 'E · 세션 보기', exact: true }).isEnabled(), '근접 판정 실패');
+  check((await page.locator('.explore-message').innerText()).includes('browser-check'), '하단 세션 프로젝트 누락');
+  check((await page.locator('.explore-message').innerText()).includes(before[0].shortId), '하단 세션 ID 누락');
   await page.keyboard.press('e'); await page.locator('.encounter-dialog[open]').waitFor();
   await page.screenshot({ path: 'data/office-fixture-encounter.png', fullPage: true });
   await page.getByRole('button', { name: '포켓몬 놓아주기 ↗' }).click();
@@ -92,5 +113,5 @@ async (page) => {
   await page.waitForFunction(() => document.querySelectorAll('.safari-symbol').length === 0);
   check((await snapshot()).length === 0, '확인 후 삭제 실패');
   check(!await page.locator('.encounter-dialog').isVisible(), '삭제 후 인카운터가 남음');
-  return { title: true, koreanName: true, mapAnimation: true, reducedMotion: true, fourActions: true, infoToggle: true, copyId: true, transparentTrainer: true, characterSelection: true, remoteClick: true, fullMap: true, pan: true, wheelZoom: true, pokemonVisible: true, movement: true, fixedSymbol: true, encounter: true, cancelPreserves: true, confirmedDeletion: true };
+  return { title: true, koreanName: true, mapAnimation: true, reducedMotion: true, fourActions: true, infoToggle: true, pokedex: true, copyId: true, transparentTrainer: true, characterSelection: true, generationSwitch: true, remoteClick: true, allAreas: true, fullMap: true, pan: true, wheelZoom: true, pokemonVisible: true, movement: true, fixedSymbol: true, sessionHud: true, encounter: true, cancelPreserves: true, confirmedDeletion: true };
 }

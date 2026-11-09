@@ -28,12 +28,13 @@ codex-poke-office/
 │       └── styles/               # 전역 스타일·디자인 토큰
 ├── server/                       # Node.js · TypeScript
 │   └── src/
-│       ├── api/                  # 기존 빈 폴더, API는 index.ts에 구현
 │       ├── codex/                # 탐색·JSONL 파싱·파일 사용 조회·안전한 삭제
 │       └── storage/              # 배정 JSON·포켓몬 캐시
 ├── shared/                       # 클라이언트/서버의 공통 타입
 ├── tests/
-│   └── fixtures/                 # 합성 JSONL 테스트 데이터
+│   ├── sessions.test.ts          # 임시 폴더에서 합성 JSONL·HTTP/SSE 검증
+│   ├── browser-fixture.ts        # 합성 세션 브라우저 서버
+│   └── camp.browser.js           # 실제 브라우저 조작 검증
 └── data/                         # 로컬 상태 데이터(버전 관리 제외)
 ```
 
@@ -97,7 +98,7 @@ interface SessionRecord {
 
 ## 구현 파일
 
-API·SSE·탐색 주기는 `server/src/index.ts`에서 연결하며, 별도 라우터·감시 프레임워크를 추가하지 않습니다. 사용하지 않는 빈 폴더는 그대로 둡니다.
+API·SSE·탐색 주기는 `server/src/index.ts`에서 연결하며, 별도 라우터·감시 프레임워크를 추가하지 않습니다. 미사용 `api/`, `tests/fixtures/` 자리표시 파일은 제거했습니다. 합성 JSONL은 검증할 때 임시 폴더에 생성합니다.
 
 ```text
 client/src/main.tsx

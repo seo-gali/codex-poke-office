@@ -105,12 +105,12 @@ export function ResearchCamp({ sessions, filter, still, onSelect, trainer }: { s
           const group = ordered.filter(s => (s.usage === 'active') === active), rank = group.findIndex(s => s.sessionId === session.sessionId);
           const position = places[key] ?? (active ? spawn(key, rank, group.length) : rest(rank, group.length));
           const size = 96;
-          return <button className="camp-station" type="button" key={key} data-session={session.sessionId} data-active={active} data-working={working(session) && !still} data-dragging={dragging === key} style={{ left: position.x - size / 2, top: position.y - size, width: size, height: size, zIndex: dragging === key ? 1000 : Math.round(position.y) }} aria-label={`${session.pokemon.name} · ${session.projectName} · ${session.activity.label}`} title="드래그·방향키로 이동 / 클릭·Enter로 도감 열기" onPointerDown={e => start(e, key)} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onClick={() => { if (!suppressClick.current) onSelect(session.sessionId); }} onKeyDown={e => {
+          return <button className="camp-station" type="button" key={key} data-session={session.sessionId} data-active={active} data-dragging={dragging === key} style={{ left: position.x - size / 2, top: position.y - size, width: size, height: size, zIndex: dragging === key ? 1000 : Math.round(position.y) }} aria-label={`${session.pokemon.name} · ${session.projectName} · ${session.activity.label}`} title="드래그·방향키로 이동 / 클릭·Enter로 도감 열기" onPointerDown={e => start(e, key)} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onClick={() => { if (!suppressClick.current) onSelect(session.sessionId); }} onKeyDown={e => {
             if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
             e.preventDefault(); const dx = e.key === 'ArrowLeft' ? -15 : e.key === 'ArrowRight' ? 15 : 0, dy = e.key === 'ArrowUp' ? -15 : e.key === 'ArrowDown' ? 15 : 0;
             held.current[key] = Date.now() + 10000; setPlaces(previous => ({ ...previous, [key]: place(key, position.x + dx, position.y + dy) }));
           }}>
-            <span className={`camp-speech ${session.activity.kind}`}>{session.activity.label}</span>
+            <span className="camp-speech">{session.activity.label}</span>
             <span className="camp-platform"><PokemonAgent pokemon={session.pokemon} still={still || !active} /></span>
             <span className="camp-state" style={{ top: size - pokemonDrawSize(session.pokemon) - 10 }}><ActivityBall records={session.activity.records} /></span>
             <strong className="camp-pokemon-name">{session.pokemon.name}<i className={`usage-dot ${session.usage}`} /></strong>

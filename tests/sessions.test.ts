@@ -84,6 +84,7 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
   assert.equal(initial.sessions[0].projectName, 'sample-project');
   assert.equal(initial.sessions.find(s => s.sessionId === ids[0])!.observation, 'recent-event');
   assert.equal(initial.sessions.find(s => s.sessionId === ids[1])!.observation, 'turn-complete');
+  assert.equal(initial.sessions.find(s => s.sessionId === ids[0])!.activity.records, 1);
   assert.equal(initial.sessions[0].pokemon.spriteUrl, pokemonSprite(initial.sessions[0].pokemon.id));
   assert.match(initial.sessions[0].pokemon.name, /^포켓몬 #\d+$/);
   await until(async () => requested > 0, 'API 장애 요청 미실행');
@@ -92,13 +93,20 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
   await appendFile(firstFile, record('response_item', { type: 'custom_tool_call', name: 'exec', input: secretMarker }));
   await until(async () => (await snapshot()).sessions.find(s => s.sessionId === ids[0])?.activity.toolCalls === 1, '도구 호출 집계 실패');
   assert.equal((await snapshot()).sessions.find(s => s.sessionId === ids[0])!.activity.label, '도구 호출');
+  assert.equal((await snapshot()).sessions.find(s => s.sessionId === ids[0])!.activity.records, 2);
   await appendFile(firstFile, record('response_item', { type: 'custom_tool_call_output', output: secretMarker }));
   await until(async () => (await snapshot()).sessions.find(s => s.sessionId === ids[0])?.activity.kind === 'result', '도구 결과 반영 실패');
+  assert.equal((await snapshot()).sessions.find(s => s.sessionId === ids[0])!.activity.records, 3);
   const partial = record('event_msg', { type: 'task_complete' });
   await appendFile(firstFile, partial.slice(0, 15));
   await until(async () => (await snapshot()).sessions.find(s => s.sessionId === ids[0])?.observation === 'unknown', '부분 JSONL 상태 확인 실패');
   await appendFile(firstFile, partial.slice(15));
   await until(async () => (await snapshot()).sessions.find(s => s.sessionId === ids[0])?.observation === 'turn-complete', '부분 레코드 복구 실패');
+  assert.equal((await snapshot()).sessions.find(s => s.sessionId === ids[0])!.activity.records, 4);
+  await appendFile(firstFile, record('event_msg', { type: 'task_started' }));
+  await until(async () => (await snapshot()).sessions.find(s => s.sessionId === ids[0])?.activity.kind === 'started', '새 응답 반영 실패');
+  assert.equal((await snapshot()).sessions.find(s => s.sessionId === ids[0])!.activity.toolCalls, 0);
+  assert.equal((await snapshot()).sessions.find(s => s.sessionId === ids[0])!.activity.records, 5, '새 응답이 누적 기록을 초기화함');
   await writeFile(join(root, 'same-id.jsonl'), metadata(ids[0]) + record('event_msg', { type: 'task_started' }));
   await until(async () => (await snapshot()).sessions.find(s => s.sessionId === ids[0])?.observation === 'recent-event', '동일 ID 기록 반영 실패');
   assert.equal((await snapshot()).sessions.length, 2);

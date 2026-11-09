@@ -6,7 +6,7 @@ export const validId = (id: unknown): id is string => typeof id === 'string' && 
 export function emptyLog() {
   return { offset: 0, pending: Buffer.alloc(0), sessionId: null as string | null, projectName: null as string | null,
     lastObservedAt: null as string | null, complete: false, malformed: false, modified: 0,
-    activity: { kind: 'unknown', label: '활동 기록 없음', at: null, toolCalls: 0 } as SessionRecord['activity'] };
+    activity: { kind: 'unknown', label: '활동 기록 없음', at: null, toolCalls: 0, records: 0 } as SessionRecord['activity'] };
 }
 export type LogState = ReturnType<typeof emptyLog>;
 
@@ -50,7 +50,7 @@ export async function readLog(file: string, size: number, modified: number, prev
           if (['function_call_output', 'custom_tool_call_output'].includes(type)) { kind = 'result'; label = '도구 결과 기록'; }
           if (type === 'message' && row.payload.role === 'assistant') { kind = 'message'; label = '응답 메시지 기록'; }
         }
-        if (kind) state.activity = { kind, label, at, toolCalls: state.activity.toolCalls };
+        if (kind) state.activity = { kind, label, at, toolCalls: state.activity.toolCalls, records: state.activity.records + 1 };
       } catch { state.malformed = true; }
     }
     state.pending = Buffer.from(bytes.subarray(start));

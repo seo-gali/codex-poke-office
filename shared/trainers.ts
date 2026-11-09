@@ -1,19 +1,19 @@
 export const trainers = {
-  red: {"name":"레드","generation":1,"first":1,"last":151,"walking":"red.png","backFrames":5,"source":"emerald"},
-  leaf: {"name":"리프","generation":1,"first":1,"last":151,"walking":"leaf.png","backFrames":5,"source":"emerald"},
-  ethan: {"name":"심향","generation":2,"first":152,"last":251,"back":"https://raw.githubusercontent.com/Pawkkie/Team-Aquas-Asset-Repo/main/Trainer%20Back%20Sprites/hyo/gold_back_pic.png","backFrames":5,"source":"pokengine","overworld":"01f3plll"},
-  kris: {"name":"크리스","generation":2,"first":152,"last":251,"back":"https://raw.githubusercontent.com/LucianoNeo/gen1recomp-mods/master/hgss_sprites/assets/battle/back-animated/krisplayer.png","backFrames":1,"backColumns":5,"source":"pokengine","overworld":"01xid4wg"},
-  brendan: {"name":"휘웅","generation":3,"first":252,"last":386,"walking":"brendan/walking.png","backFrames":4,"source":"emerald"},
-  may: {"name":"봄이","generation":3,"first":252,"last":386,"walking":"may/walking.png","backFrames":4,"source":"emerald"},
-  lucas: {"name":"광휘","generation":4,"first":387,"last":493,"back":"https://raw.githubusercontent.com/Pawkkie/Team-Aquas-Asset-Repo/main/Trainer%20Back%20Sprites/Lhea/pt_lucas.png","backFrames":5,"source":"pokengine","overworld":"012pha2i"},
-  hilbert: {"name":"투지","generation":5,"first":494,"last":649,"back":"https://raw.githubusercontent.com/Pawkkie/Team-Aquas-Asset-Repo/main/Trainer%20Back%20Sprites/kwenio/hilbert_back.png","backFrames":1,"source":"pokengine","overworld":"0133xp9e"},
-  hilda: {"name":"투희","generation":5,"first":494,"last":649,"back":"https://raw.githubusercontent.com/LaosyLucy/pokemon-xomni/master/Graphics/Characters/trback001_1.png","backFrames":1,"backColumns":4,"source":"pokengine","overworld":"01uhbo4g"},
-  calem: {"name":"칼름","generation":6,"first":650,"last":721,"back":"https://raw.githubusercontent.com/Pawkkie/Team-Aquas-Asset-Repo/main/Trainer%20Back%20Sprites/kwenio/calem.png","backFrames":1,"source":"pokengine","overworld":"01jw8ze2"},
-  serena: {"name":"세레나","generation":6,"first":650,"last":721,"back":"https://pokengine.b-cdn.net/play/images/trainers/fronts/014qszl8.webp","backFrames":1,"front":true,"source":"pokengine","overworld":"014qszl8"},
-  elio: {"name":"영태","generation":7,"first":722,"last":809,"back":"https://pokengine.b-cdn.net/play/images/trainers/fronts/01qbqk2v.webp","backFrames":1,"front":true,"source":"pokengine","overworld":"01qbqk2v"},
-  selene: {"name":"미월","generation":7,"first":722,"last":809,"back":"https://pokengine.b-cdn.net/play/images/trainers/fronts/01fnklmw.webp","backFrames":1,"front":true,"source":"pokengine","overworld":"01fnklmw"},
-  victor: {"name":"승재","generation":8,"first":810,"last":905,"back":"https://pokengine.b-cdn.net/play/images/trainers/fronts/01p5eh81.webp","backFrames":1,"front":true,"source":"pokengine","overworld":"01p5eh81"},
-  gloria: {"name":"우리","generation":8,"first":810,"last":905,"back":"https://pokengine.b-cdn.net/play/images/trainers/fronts/01arym2u.webp","backFrames":1,"front":true,"source":"pokengine","overworld":"01arym2u"},
+  red: {"name":"레드","generation":1,"first":1,"last":151,"walking":"red.png","source":"emerald"},
+  leaf: {"name":"리프","generation":1,"first":1,"last":151,"walking":"leaf.png","source":"emerald"},
+  ethan: {"name":"심향","generation":2,"first":152,"last":251,"source":"pokengine","overworld":"01f3plll"},
+  kris: {"name":"크리스","generation":2,"first":152,"last":251,"source":"pokengine","overworld":"01xid4wg"},
+  brendan: {"name":"휘웅","generation":3,"first":252,"last":386,"walking":"brendan/walking.png","source":"emerald"},
+  may: {"name":"봄이","generation":3,"first":252,"last":386,"walking":"may/walking.png","source":"emerald"},
+  lucas: {"name":"광휘","generation":4,"first":387,"last":493,"source":"pokengine","overworld":"012pha2i"},
+  hilbert: {"name":"투지","generation":5,"first":494,"last":649,"source":"pokengine","overworld":"0133xp9e"},
+  hilda: {"name":"투희","generation":5,"first":494,"last":649,"source":"pokengine","overworld":"01uhbo4g"},
+  calem: {"name":"칼름","generation":6,"first":650,"last":721,"source":"pokengine","overworld":"01jw8ze2"},
+  serena: {"name":"세레나","generation":6,"first":650,"last":721,"source":"pokengine","overworld":"014qszl8"},
+  elio: {"name":"영태","generation":7,"first":722,"last":809,"source":"pokengine","overworld":"01qbqk2v"},
+  selene: {"name":"미월","generation":7,"first":722,"last":809,"source":"pokengine","overworld":"01fnklmw"},
+  victor: {"name":"승재","generation":8,"first":810,"last":905,"source":"pokengine","overworld":"01p5eh81"},
+  gloria: {"name":"우리","generation":8,"first":810,"last":905,"source":"pokengine","overworld":"01arym2u"},
 } as const;
 export type TrainerId = keyof typeof trainers;
 
@@ -28,6 +28,6 @@ export function pokemonCandidates(character: TrainerId) {
   return Array.from({ length: last - first + 1 }, (_, i) => first + i);
 }
 
-export function pokemonSprite(id: number) {
-  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${animatedPokemon.has(id) ? 'versions/generation-v/black-white/animated/' : ''}${id}.${animatedPokemon.has(id) ? 'gif' : 'png'}`;
+export function pokemonSprite(id: number, moving = true) {
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${moving ? animatedPokemon.has(id) ? 'versions/generation-v/black-white/animated/' : 'other/showdown/' : ''}${id}.${moving ? 'gif' : 'png'}`;
 }

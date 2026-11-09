@@ -24,7 +24,7 @@ codex-poke-office/
 ├── client/                       # React · Vite · TypeScript
 │   └── src/
 │       ├── app/                  # 앱 진입점·상태 연결
-│       ├── components/           # 연구 캠프·트레이너·인카운터·삭제 확인
+│       ├── components/           # 연구소·자유 이동·트레이너·도감·활동 볼·삭제 확인
 │       └── styles/               # 전역 스타일·디자인 토큰
 ├── server/                       # Node.js · TypeScript
 │   └── src/
@@ -84,7 +84,7 @@ interface SessionRecord {
   lastFileModifiedAt: string | null;
   observation: 'recent-event' | 'turn-complete' | 'quiet' | 'unknown';
   usage: 'active' | 'inactive' | 'unknown';
-  activity: { kind: string; label: string; at: string | null; toolCalls: number };
+  activity: { kind: string; label: string; at: string | null; toolCalls: number; records: number };
 }
 ```
 
@@ -99,6 +99,7 @@ client/src/main.tsx
 client/public/lab/                # 사용자 승인으로 제작한 연구소 배경
 client/src/app/App.tsx
 client/src/components/ResearchCamp.tsx
+client/src/components/ActivityBall.tsx
 client/src/components/Trainer.tsx
 client/src/components/PokemonAgent.tsx
 client/src/components/SessionDetails.tsx

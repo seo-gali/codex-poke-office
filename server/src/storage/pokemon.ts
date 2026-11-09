@@ -20,7 +20,7 @@ export async function pokemonCache(directory: string, api: string) {
   const peek = (id: number): Pokemon => {
     const saved = cache[id] as Pokemon | undefined;
     const valid = saved?.id === id && typeof saved.name === 'string' && (saved.spriteUrl === null || sprite(saved.spriteUrl));
-    if (valid && /[가-힣]/.test(saved.name) && saved.spriteUrl === pokemonSprite(id) && Array.isArray(saved.types) && saved.types.every(type => Object.values(types).includes(type)) && (saved.description === null || typeof saved.description === 'string')) return { id, name: saved.name, spriteUrl: sprite(saved.spriteUrl), types: saved.types, description: saved.description };
+    if (valid && /[가-힣]/.test(saved.name) && [pokemonSprite(id), pokemonSprite(id, false)].includes(saved.spriteUrl!) && Array.isArray(saved.types) && saved.types.every(type => Object.values(types).includes(type)) && (saved.description === null || typeof saved.description === 'string')) return { id, name: saved.name, spriteUrl: pokemonSprite(id), types: saved.types, description: saved.description };
     return { id, name: `포켓몬 #${id}`, spriteUrl: pokemonSprite(id), types: [], description: null };
   };
   const get = async (id: number): Promise<Pokemon> => {

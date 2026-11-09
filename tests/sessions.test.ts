@@ -8,7 +8,7 @@ import { mkdtemp, mkdir, rmdir, writeFile, appendFile, readFile, utimes, open, a
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { Snapshot, SessionView } from '../shared/session.ts';
-import { trainers, pokemonCandidates } from '../shared/trainers.ts';
+import { trainers, pokemonCandidates, pokemonSprite } from '../shared/trainers.ts';
 import type { TrainerId } from '../shared/trainers.ts';
 import { releaseFiles } from '../server/src/codex/usage.ts';
 
@@ -39,14 +39,17 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
   await mkdir(join(directory, 'data'));
   await writeFile(join(directory, 'data', 'assignments.json'), JSON.stringify({ [ids[0]]: 1007, [ids[1]]: 25 }));
   const port = await freePort(), clientPort = await freePort();
-  let apiFails = true, requested = 0;
+  let apiFails = true, requested = 0, apiDelay = 0;
+  const requestedIds = new Set<number>();
   const mock = createServer((request, response) => {
     assert.match(request.url!, /^\/pokemon(?:-species)?\/\d+$/);
     requested++;
     if (apiFails) { response.writeHead(503).end(); return; }
     const id = Number(request.url!.split('/').at(-1));
+    requestedIds.add(id);
     response.setHeader('Content-Type', 'application/json');
-    response.end(JSON.stringify(request.url!.startsWith('/pokemon-species/') ? { id, names: [{ language: { name: 'en' }, name: `test-${id}` }, { language: { name: 'ko' }, name: `테스트${id}` }], flavor_text_entries: [{ language: { name: 'ko' }, flavor_text: '합성 도감\n설명' }], private: secretMarker } : { id, name: `test-${id}`, sprites: { versions: { 'generation-v': { 'black-white': { animated: { front_default: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/${id}.gif` } } } } }, types: [{ type: { name: 'normal' } }], private: secretMarker }));
+    const body = JSON.stringify(request.url!.startsWith('/pokemon-species/') ? { id, names: [{ language: { name: 'en' }, name: `test-${id}` }, { language: { name: 'ko' }, name: `테스트${id}` }], flavor_text_entries: [{ language: { name: 'ko' }, flavor_text: '합성 도감\n설명' }], private: secretMarker } : { id, types: [{ type: { name: 'normal' } }], private: secretMarker });
+    setTimeout(() => response.end(body), apiDelay);
   });
   const apiPort = await listen(mock); t.after(() => { mock.closeAllConnections(); mock.close(); });
   let output = '';
@@ -81,9 +84,9 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
   assert.equal(initial.sessions[0].projectName, 'sample-project');
   assert.equal(initial.sessions.find(s => s.sessionId === ids[0])!.observation, 'recent-event');
   assert.equal(initial.sessions.find(s => s.sessionId === ids[1])!.observation, 'turn-complete');
-  assert.equal(initial.sessions[0].pokemon.spriteUrl, null);
+  assert.equal(initial.sessions[0].pokemon.spriteUrl, pokemonSprite(initial.sessions[0].pokemon.id));
   assert.match(initial.sessions[0].pokemon.name, /^포켓몬 #\d+$/);
-  assert.ok(requested > 0, 'API 장애 요청 미실행');
+  await until(async () => requested > 0, 'API 장애 요청 미실행');
   const before = Object.fromEntries(initial.sessions.map(s => [s.sessionId, s.pokemon.id]));
   assert.deepEqual(Object.keys(initial.sessions[0]).sort(), ['sessionId', 'shortId', 'projectName', 'pokemon', 'lastObservedAt', 'lastFileModifiedAt', 'observation', 'usage', 'activity'].sort());
   await appendFile(firstFile, record('response_item', { type: 'custom_tool_call', name: 'exec', input: secretMarker }));
@@ -124,6 +127,9 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
   await writeFile(join(directory, 'data', 'pokemon-cache.json'), JSON.stringify({ [cachedId]: { id: cachedId, name: 'old-english-name', spriteUrl: null } }));
   child = start();
   await until(async () => { try { return (await snapshot()).sessions.length === 3; } catch { return false; } }, '재시작 실패');
+  const selectedController = new AbortController(); t.after(() => selectedController.abort());
+  await fetch(`${base}/api/events?trainer=brendan`, { signal: selectedController.signal });
+  await until(async () => (await snapshot()).sessions.every(s => s.pokemon.types.length > 0), '선택한 세대 정보 조회 실패');
   for (const s of (await snapshot()).sessions) assert.equal(s.pokemon.id, mapping[s.sessionId].brendan);
   for (const s of (await snapshot()).sessions) assert.equal(s.pokemon.name, `테스트${s.pokemon.id}`);
   const raw: Snapshot = await (await fetch(`${base}/api/sessions`)).json();
@@ -132,9 +138,8 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
       const choice = session.pokemon[character], range = trainers[character];
       assert.ok(choice.id >= range.first && choice.id <= range.last);
       assert.ok(pokemonCandidates(character).includes(choice.id));
-      assert.match(choice.spriteUrl!, /\/animated\/\d+\.gif$/);
-      assert.deepEqual(choice.types, ['노말']);
-      assert.equal(choice.description, '합성 도감 설명');
+      assert.equal(choice.spriteUrl, pokemonSprite(choice.id));
+      if (character === 'brendan') { assert.deepEqual(choice.types, ['노말']); assert.equal(choice.description, '합성 도감 설명'); }
     }
     assert.equal(new Set(Object.values(session.pokemon).map(p => p.id)).size, Object.keys(trainers).length);
   }
@@ -152,7 +157,11 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
     assert.ok(!errorBody.includes(directory) && !errorBody.includes('assignments.json.tmp'), '저장 오류가 원본 경로를 노출함');
     assert.deepEqual((await (await fetch(`${base}/api/sessions`)).json()).sessions.map((s: Snapshot['sessions'][number]) => s.pokemon.elio.id), raw.sessions.map(s => s.pokemon.elio.id));
   } finally { await rmdir(blockedSave); }
+  assert.equal((await fetch(`${base}/api/events?trainer=invalid`)).status, 400);
+  requestedIds.clear(); apiDelay = 1500;
+  const started = performance.now();
   const changed = await shuffle('elio'); assert.equal(changed.status, 200);
+  assert.ok(performance.now() - started < 800, '전환이 외부 API 또는 파일 사용 조회를 기다림');
   const shuffled: Snapshot = await changed.json();
   assert.equal(new Set(shuffled.sessions.map(s => s.pokemon.elio.id)).size, 3);
   for (const session of shuffled.sessions) {
@@ -161,6 +170,10 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
     assert.ok(pokemonCandidates('elio').includes(session.pokemon.elio.id));
     for (const character of Object.keys(trainers) as TrainerId[]) if (character !== 'elio') assert.equal(session.pokemon[character].id, previous.pokemon[character].id);
   }
+  await until(async () => requestedIds.size === 3, '추첨한 세션 수만큼 조회하지 않음');
+  assert.deepEqual([...requestedIds].sort(), shuffled.sessions.map(s => s.pokemon.elio.id).sort(), '선택하지 않은 세대를 조회함');
+  await until(async () => (await (await fetch(`${base}/api/sessions`)).json()).sessions.every((s: Snapshot['sessions'][number]) => s.pokemon.elio.types.length > 0), '지연된 정보의 후속 갱신 실패');
+  apiDelay = 0;
   const oldChild = child; oldChild.kill(); await once(oldChild, 'exit'); child = start();
   await until(async () => { try { return (await snapshot()).sessions.length === 3; } catch { return false; } }, '재배정 후 재시작 실패');
   const restored: Snapshot = await (await fetch(`${base}/api/sessions`)).json();

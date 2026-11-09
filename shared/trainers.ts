@@ -12,8 +12,8 @@ export const trainers = {
   serena: {"name":"세레나","generation":6,"first":650,"last":721,"back":"https://pokengine.b-cdn.net/play/images/trainers/fronts/014qszl8.webp","backFrames":1,"front":true,"source":"pokengine","overworld":"014qszl8"},
   elio: {"name":"영태","generation":7,"first":722,"last":809,"back":"https://pokengine.b-cdn.net/play/images/trainers/fronts/01qbqk2v.webp","backFrames":1,"front":true,"source":"pokengine","overworld":"01qbqk2v"},
   selene: {"name":"미월","generation":7,"first":722,"last":809,"back":"https://pokengine.b-cdn.net/play/images/trainers/fronts/01fnklmw.webp","backFrames":1,"front":true,"source":"pokengine","overworld":"01fnklmw"},
-  victor: {"name":"승재","generation":8,"first":810,"last":898,"back":"https://pokengine.b-cdn.net/play/images/trainers/fronts/01p5eh81.webp","backFrames":1,"front":true,"source":"pokengine","overworld":"01p5eh81"},
-  gloria: {"name":"우리","generation":8,"first":810,"last":898,"back":"https://pokengine.b-cdn.net/play/images/trainers/fronts/01arym2u.webp","backFrames":1,"front":true,"source":"pokengine","overworld":"01arym2u"},
+  victor: {"name":"승재","generation":8,"first":810,"last":905,"back":"https://pokengine.b-cdn.net/play/images/trainers/fronts/01p5eh81.webp","backFrames":1,"front":true,"source":"pokengine","overworld":"01p5eh81"},
+  gloria: {"name":"우리","generation":8,"first":810,"last":905,"back":"https://pokengine.b-cdn.net/play/images/trainers/fronts/01arym2u.webp","backFrames":1,"front":true,"source":"pokengine","overworld":"01arym2u"},
 } as const;
 export type TrainerId = keyof typeof trainers;
 
@@ -25,5 +25,9 @@ export const animatedPokemon = new Set([...Array.from({ length: 649 }, (_, i) =>
 ]);
 export function pokemonCandidates(character: TrainerId) {
   const { first, last } = trainers[character];
-  return [...animatedPokemon].filter(id => id >= first && id <= last);
+  return Array.from({ length: last - first + 1 }, (_, i) => first + i);
+}
+
+export function pokemonSprite(id: number) {
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${animatedPokemon.has(id) ? 'versions/generation-v/black-white/animated/' : ''}${id}.${animatedPokemon.has(id) ? 'gif' : 'png'}`;
 }

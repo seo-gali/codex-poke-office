@@ -29,7 +29,7 @@ export function App() {
   useEffect(() => { localStorage.setItem('poke-office-trainer', trainer); }, [trainer]);
   const [still, setStill] = useState(document.hidden || matchMedia('(prefers-reduced-motion: reduce)').matches);
   useEffect(() => {
-    const events = new EventSource('/api/events');
+    const events = new EventSource(`/api/events?trainer=${trainer}`);
     events.onopen = () => setConnection('연결됨');
     events.onmessage = event => { setSnapshot(JSON.parse(event.data)); setUpdated(new Date()); };
     events.onerror = () => setConnection('연결 끊김 · 재연결 중');
@@ -37,7 +37,7 @@ export function App() {
     const visibility = () => setStill(document.hidden || media.matches);
     document.addEventListener('visibilitychange', visibility); media.addEventListener('change', visibility);
     return () => { events.close(); document.removeEventListener('visibilitychange', visibility); media.removeEventListener('change', visibility); };
-  }, []);
+  }, [trainer]);
   const allSessions = snapshot.sessions.map(session => ({ ...session, pokemon: session.pokemon[trainer] }));
   const sessions = allSessions.filter(s => filter === 'all' || s.usage === filter);
   const active = allSessions.find(s => s.sessionId === selected);

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
-import { trainers, pokemonCandidates, animatedPokemon } from '../shared/trainers.ts';
+import { trainers, pokemonCandidates, pokemonSprite } from '../shared/trainers.ts';
 import type { TrainerId } from '../shared/trainers.ts';
 
 const directory = await mkdtemp(join(tmpdir(), 'poke-haven-browser-'));
@@ -23,7 +23,7 @@ const choices: Partial<Record<TrainerId, number>> = { red: 25, leaf: 1, brendan:
 for (const character of Object.keys(trainers) as TrainerId[]) choices[character] ??= pokemonCandidates(character).find(number => !Object.values(choices).includes(number))!;
 await writeFile(join(directory, 'data', 'assignments.json'), JSON.stringify(Object.fromEntries(ids.map(id => [id, choices]))));
 const labels: Record<number, [string, string]> = { 25: ['피카츄', '전기'], 1: ['이상해씨', '풀'], 252: ['나무지기', '풀'], 255: ['아차모', '불꽃'] };
-const cache = Object.fromEntries([...animatedPokemon].map(number => { const [name, type] = labels[number] ?? [`합성 포켓몬 ${number}`, '노말']; return [number, { id: number, name, spriteUrl: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/${number}.gif`, types: [type], description: `${name}의 합성 도감 설명입니다.` }]; }));
+const cache = Object.fromEntries(Array.from({ length: 905 }, (_, i) => i + 1).map(number => { const [name, type] = labels[number] ?? [`합성 포켓몬 ${number}`, '노말']; return [number, { id: number, name, spriteUrl: pokemonSprite(number), types: [type], description: `${name}의 합성 도감 설명입니다.` }]; }));
 await writeFile(join(directory, 'data', 'pokemon-cache.json'), JSON.stringify(cache));
 await symlink(resolve('dist'), join(directory, 'dist'), 'junction');
 assert.ok(sessions.startsWith(directory));

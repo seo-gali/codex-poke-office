@@ -2,7 +2,7 @@ async (page) => {
   const check = (value, message) => { if (!value) throw new Error(message); };
   check(new URL(page.url()).port === '4191', '합성 서버 4191에서만 실행합니다');
   // Codex 프로세스를 실행하지 않는 UI 상태 픽스처
-  await page.route('**/api/events', async route => {
+  await page.route('**/api/events*', async route => {
     const data = await (await page.request.get('http://127.0.0.1:4191/api/sessions')).json();
     const sample = data.sessions.find(s => s.activity.kind === 'tool');
     sample.usage = 'active'; sample.observation = 'recent-event'; sample.activity.at = new Date().toISOString();
@@ -17,12 +17,11 @@ async (page) => {
   check(active && quiet && quiet.usage === 'inactive', '사용 중·미사용 합성 기록 누락');
   check(await page.getByRole('button', { name: '탐험', exact: true }).count() === 0, '탐험 탭이 남음');
   check(await page.locator('.safari-view, .map-controls').count() === 0, '지도 기능이 남음');
-  check(await page.locator('.lab-architecture image[href="/lab/floor.png"]').count() >= 100, '아이소메트릭 바닥 누락');
-  check(await page.locator('.lab-architecture image[href="/lab/wall.png"]').count() >= 8, '방의 두 벽 누락');
-  for (const name of ['floor', 'wall', 'desk', 'monitor']) {
-    const asset = await page.request.get(`http://127.0.0.1:4191/lab/${name}.png`);
-    check(asset.ok() && asset.headers()['content-type'] === 'image/png', `연구실 ${name} 이미지 제공 실패`);
-  }
+  await page.locator('.lab-background').evaluate(e => e.decode());
+  check(await page.locator('.lab-background').evaluate(e => e.naturalWidth === 1536 && e.naturalHeight === 1024), '연구소 배경 크기 오류');
+  check(await page.locator('.lab-desk,.lab-monitor,.lab-architecture').count() === 0, '기존 교실 자산이 남음');
+  const asset = await page.request.get('http://127.0.0.1:4191/lab/oak-lab.png');
+  check(asset.ok() && asset.headers()['content-type'] === 'image/png', '연구소 배경 제공 실패');
   const station = id => page.locator(`.camp-station[data-session="${id}"]`);
   await page.waitForFunction(id => document.querySelector(`.camp-station[data-session="${id}"] img.sprite`)?.src.endsWith('.gif'), active.sessionId);
   await page.waitForFunction(id => document.querySelector(`.camp-station[data-session="${id}"] img.sprite`)?.src.endsWith('.png'), quiet.sessionId);
@@ -38,9 +37,9 @@ async (page) => {
   const options = await select.locator('option').evaluateAll(es => es.map(e => ({ id: e.value, name: e.textContent.split(' · ')[0] })));
   check(options.length === 15 && options.some(o => o.name === '영태') && options.some(o => o.name === '미월'), '세대별 트레이너 누락');
   const choose = async id => { await select.selectOption(id); await page.waitForFunction(id => { const e = document.querySelector('[aria-label="트레이너 선택"]'); return e.value === id && !e.disabled; }, id); };
-  const portraits = [];
+  const portraits = [], changes = [];
   for (const { id, name } of options) {
-    await choose(id);
+    const started = Date.now(); await choose(id); changes.push(Date.now() - started);
     await page.waitForFunction(name => document.querySelector(`.camp-trainer [aria-label="내 트레이너 · ${name}"] img`)?.src.startsWith('data:'), name);
     check(await page.locator('.camp-trainer-sprite').evaluate(e => e.getBoundingClientRect().height >= 70), `${name} 표시 크기가 작음`);
     await station(active.sessionId).click();
@@ -113,6 +112,6 @@ async (page) => {
   await failed.route('**/overworlds/*.webp', route => route.abort());
   await failed.goto('http://127.0.0.1:4191'); await failed.locator('.camp-trainer .trainer-error').waitFor();
   await failed.screenshot({ path: 'data/camp-trainer-error.png', fullPage: true }); await failed.close();
-  await page.unroute('**/api/events');
-  return { campOnly: true, trainers: 15, publicPortraits: true, activeMotion: true, inactiveStill: true, reducedMotion: true, reshuffle: true, refreshPreserves: true, filters: true, info: true, pokedex: true, clipboard: true, responsive: true, release: true, loading: true, loadError: true };
+  await page.unroute('**/api/events*');
+  return { maxSwitchMs: Math.max(...changes), campOnly: true, trainers: 15, publicPortraits: true, activeMotion: true, inactiveStill: true, reducedMotion: true, reshuffle: true, refreshPreserves: true, filters: true, info: true, pokedex: true, clipboard: true, responsive: true, release: true, loading: true, loadError: true };
 }

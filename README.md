@@ -28,7 +28,7 @@ npm start
 
 | 기능 | 동작 |
 | --- | --- |
-| 연구 캠프 | 아이소메트릭 방에 선택한 내 트레이너와 세션 포켓몬·컴퓨터 작업대를 배치하고 옆에 연구 노트 표시 |
+| 연구 캠프 | 회복 장치·몬스터볼 연구대·나무 바닥이 있는 입체 연구소에 내 트레이너와 세션 포켓몬 배치 |
 | 실제 기록 탐색 | 최근 24시간 수정된 JSONL을 재귀 탐색, 검증한 세션 ID로 구분 |
 | 활동 반응 | 응답 시작·도구 호출·도구 결과·메시지·응답 완료 기록과 이번 응답의 도구 호출 수 표시 |
 | 모션 | 사용 중이면서 최근 활동이 있는 동료는 GIF와 작업 반응. 완료·미사용·확인 불가는 정지 도트 |
@@ -50,9 +50,9 @@ JSONL의 `task_started`, `task_complete`, `turn_aborted`, `function_call`, `cust
 
 레드·리프(1세대), 심향·크리스(2세대), 휘웅·봄이(3세대), 광휘(4세대), 투지·투희(5세대), 칼름·세레나(6세대), 영태·미월(7세대), 승재·우리(8세대)를 선택합니다. 32×32 트레이너도 기존 16×32 트레이너와 몸 크기가 비슷하게 표시합니다. 로딩 중에는 몬스터볼을, 실패하면 오류 표시를 사용합니다.
 
-후보는 [PokéAPI GIF 목록](https://github.com/PokeAPI/sprites/tree/master/sprites/pokemon/versions/generation-v/black-white/animated)에서 확인한 종입니다. 1–5세대 전체, 6세대 54종, 7세대 74종, 8세대 62종을 사용합니다. GIF가 없는 종은 배정하지 않습니다.
+세대 전체 번호 범위에서 세션 수만큼 먼저 추첨합니다. 범위는 1세대 1–151, 2세대 152–251, 3세대 252–386, 4세대 387–493, 5세대 494–649, 6세대 650–721, 7세대 722–809, 8세대 810–905입니다. [PKHeX의 세대 경계 자료](https://github.com/kwsch/PKHeX/blob/master/PKHeX.Core/Legality/Legal.cs)와 [한글 종 이름](https://github.com/kwsch/PKHeX/blob/master/PKHeX.Core/Resources/text/other/ko/text_Species_ko.txt)을 대조했습니다. PKHeX 실행 파일이나 코드는 포함하지 않습니다. [PokeAPI/sprites](https://github.com/PokeAPI/sprites)의 확인된 GIF가 있으면 사용하고, 나머지는 원본 PNG를 표시합니다.
 
-트레이너 변경 시 이전 종을 피하고 후보가 충분하면 세션끼리 중복되지 않게 뽑습니다. 작업대 배치도 세션·포켓몬 조합으로 섞습니다. 필터를 바꿔도 각 자리는 유지합니다. 선택을 유지한 동안 일반 갱신·새로고침·서버 재시작에서는 마지막 배정을 유지합니다. 배정은 `data/assignments.json`, 포켓몬 정보는 `data/pokemon-cache.json`에 저장합니다. 원본 Codex 기록은 재배정 때문에 변경하지 않습니다.
+트레이너 변경 시 이전 종을 피하고 후보가 충분하면 세션끼리 중복되지 않게 뽑습니다. 작업대 배치도 세션·포켓몬 조합으로 섞습니다. 필터를 바꿔도 각 자리는 유지합니다. 선택을 유지한 동안 일반 갱신·새로고침·서버 재시작에서는 마지막 배정을 유지합니다. 배정은 `data/assignments.json`, 포켓몬 정보는 `data/pokemon-cache.json`에 저장합니다. 원본 Codex 기록은 재배정 때문에 변경하지 않습니다. 전환 요청은 번호와 이미지를 먼저 반환하며 외부 API·Windows 파일 사용 검사를 기다리지 않습니다. 이름·타입·설명은 현재 선택한 트레이너의 미조회 번호만 병렬 조회하고 SSE로 갱신합니다. 이미 받은 정보는 재사용합니다. 조회 전·실패 시에는 번호를 표시합니다.
 
 ### 놓아주기
 
@@ -76,7 +76,13 @@ JSONL의 `task_started`, `task_complete`, `turn_aborted`, `function_call`, `cust
 
 Pokéngine 자료는 각 페이지의 `Free to use with credit` 조건과 제작자 표기를 확인했습니다. 포켓몬·관련 캐릭터의 권리는 원 권리자에게 있으며, 외부 이미지 표시는 상업적 이용 허가와 별개입니다. 포켓몬·트레이너 원본 파일은 저장소에 넣지 않으며 인터넷 연결이 필요합니다.
 
-연구실의 바닥·벽·책상·모니터·책장 도트는 [uris (@imaghuris)의 Back to School 공개 데모](https://just-uris.itch.io/free-demo-back-to-school-pack)입니다. 생성형 AI를 사용하지 않은 자료이며 개인·상업 프로젝트 사용과 수정이 허용됩니다. 앱 공간에 필요한 11개 그림만 사용하고 화면·README에 크레딧을 표시합니다. 원본 자산의 [이용 조건](./client/public/lab/LICENSE.txt)은 앱 코드와 별개이며 자산 팩으로 재배포할 수 없습니다. SVG로 타일을 배치하고 바닥 일부에 색조를 적용했습니다. 인카운터 배경은 [Pokémon Showdown](https://play.pokemonshowdown.com/fx/), 포켓몬 도트는 [PokéAPI sprites](https://github.com/PokeAPI/sprites)에서 로딩합니다. 사용자 제공 [마삼의 자료](https://www.postype.com/@rudco-214/post/22967701)는 스타일 참고용이며 복제하지 않았습니다.
+연구소 배경은 사용자가 승인한 imagegen 내장 도구로 제작한 [oak-lab.png](./client/public/lab/oak-lab.png)입니다. 포켓몬·트레이너는 기존 공개 이미지를 유지합니다. 기존 교실 타일과 책상 자산은 제거했습니다. [Sprite-AI](https://www.sprite-ai.art/tools/pixel-editor)의 공개 편집기를 확인했으며, 한 프레임 512px 제한 때문에 1536×1024 배경을 이 도구로 재가공하지 않았습니다. 96×96 포켓몬 PNG는 편집기로 열어 확인했습니다. 유료 생성 API·MCP 설정은 추가하지 않았습니다.
+
+<details><summary>배경 생성 프롬프트 (imagegen 내장 도구)</summary>
+
+Use case: stylized-concept. Asset: production background for an interactive Pokemon research laboratory, NOT a UI mockup. The attached image is a composition/style reference only. Create a NEW beautifully crafted isometric pixel-art cutaway of Professor Oak's Pokemon laboratory, matching the reference's cozy wood floor, dense specialized Pokemon equipment, metal wall caps, and consistent orthographic 2:1 isometric perspective. Wide 3:2 landscape composition, complete room fully visible with a narrow transparent margin, transparent outside the room. Crisp deliberate pixel clusters, approximately 480x320 logical pixel art enlarged with nearest-neighbor edges; rich restrained GBA-era colors, dark ink outlines, small detailed textures, no blur or painterly noise. The room has two tall back walls, warm brown timber floorboards, low beige front parapets with shrubs, a front-left open doorway with green curtains and a red-white Pokeball doormat. Major focal equipment in the upper LEFT: a large cylindrical glass Pokemon healing/transporter chamber, red-and-white rounded Pokeball-like canopy, pale aqua transparent glass, chunky metallic base with cables and a cyan glowing rail. A bulky gray research console beside it, with small green/cyan displays and a blue beacon. Along the back RIGHT wall: ONE built-in research desk with a monitor, instrument drawers, shelves of books and Pokeballs, small framed Pokemon botanical diagrams, conduits. A single low research table with three red-and-white Pokeballs in the right side of the room, around 72% across and 52% down the image. Every piece of furniture shares the SAME pixel scale, perspective, consistent light from upper left, and believable size relative to the whole room. Keep the central floor and lower half open and readable, providing unobstructed ground for SIX small dynamic Pokemon sprites and a trainer that will be added by the application. Room floor roughly spans from left 7%,middle height 55% to bottom point 52%,94%, to right 95%,55%. No people, no professors, no trainers, no Pokemon creatures, no statues of creatures, no characters baked into the image. Static Pokeballs and simple posters are fine. No play button, no watermark, no signs or text, no repeated computer desks, no classroom, no office cubicles, no white tiled classroom floor. Preserve the reference's Pokemon research facility identity and dense crafted environment detail, while keeping the central/lower floor free for interactive sprites.
+
+</details>
 
 ## 검증 결과
 
@@ -92,7 +98,9 @@ Pokéngine 자료는 각 페이지의 `Free to use with credit` 조건과 제작
 
 합성 브라우저의 사용 중 UI 사례는 Codex 프로세스를 새로 실행하지 않기 위해 정제된 SSE 상태를 주입합니다. 실제 사용 여부·실제 기록 반영은 별도 실제 캠프 화면에서 확인했습니다.
 
-검증 화면은 Git에서 제외하는 `data/camp-real-desktop.png`, `data/camp-real-390x844.png`, `data/camp-trainer-portraits.png`, `data/camp-trainer-loading.png`, `data/camp-trainer-error.png`에 있습니다.
+배경 제작 후 측정한 실제 전환은 45–60ms, 서버 응답은 19–27ms였습니다. 합성 검사에서는 외부 API를 1.5초 지연시켜도 재배정 응답이 800ms 안에 반환되고 추첨한 세션 수만큼만 조회됐습니다. 측정값은 이 PC에서의 결과입니다.
+
+검증 화면은 Git에서 제외하는 `data/oak-lab-desktop.png`, `data/oak-lab-390x844.png`, `data/camp-trainer-portraits.png`, `data/camp-trainer-loading.png`, `data/camp-trainer-error.png`에 있습니다.
 
 ```powershell
 npm run build

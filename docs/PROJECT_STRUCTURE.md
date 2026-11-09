@@ -60,7 +60,7 @@ shared ──> client, server (타입 정의만)
 
 - `GET /api/health` — 서버 연결 상태 확인
 - `GET /api/sessions` — `{ sessions: SessionView[], error: string | null }` 조회
-- `GET /api/events` — 같은 응답의 변경 알림 SSE, 최초 연결 시 현재 상태 전달
+- `GET /api/events?trainer=brendan` — 최초 상태와 변경 알림 SSE, 선택한 트레이너의 미조회 포켓몬 정보만 후속 갱신
 - `DELETE /api/sessions/:sessionId` — 동일 Origin과 `X-Confirm-Session` 헤더 확인, 미사용 세션 JSONL 삭제. 성공 `{ ok: true }`, 사용 중·확인 불가·검증 실패는 409
 - `POST /api/trainers/:trainer/shuffle` — 동일 Origin과 `X-Shuffle-Trainer` 확인, 현재 세션의 해당 캐릭터 포켓몬을 재배정하고 최신 Snapshot 반환. 원본 Codex 기록은 변경하지 않음
 
@@ -88,7 +88,7 @@ interface SessionRecord {
 }
 ```
 
-`observation`은 실제 프로세스 실행 상태가 아니라 관측 결과입니다. `activity`는 로그에서 확인한 종류·정해진 문구·시각·도구 호출 수만 포함합니다. API는 캐릭터별 포켓몬을 전달하고 프런트엔드는 선택한 캐릭터의 `pokemon` 하나를 `SessionView`로 표시합니다. 캐릭터 선택 변경 시 재배정하고 일반 갱신·새로고침에서는 마지막 배정을 유지합니다. 조회 실패 시 `name`은 `포켓몬 #번호`, `spriteUrl`은 `null`입니다. 확정 타입은 `shared/session.ts`, `TrainerId`·15개 캐릭터·세대별 GIF 후보는 `shared/trainers.ts`를 기준으로 합니다.
+`observation`은 실제 프로세스 실행 상태가 아니라 관측 결과입니다. `activity`는 로그에서 확인한 종류·정해진 문구·시각·도구 호출 수만 포함합니다. API는 캐릭터별 포켓몬을 전달하고 프런트엔드는 선택한 캐릭터의 `pokemon` 하나를 `SessionView`로 표시합니다. 캐릭터 선택 변경 시 재배정하고 일반 갱신·새로고침에서는 마지막 배정을 유지합니다. 조회 전·실패 시 `name`은 `포켓몬 #번호`이며 번호로 확인할 수 있는 PNG·GIF는 먼저 표시합니다. 확정 타입은 `shared/session.ts`, `TrainerId`·15개 캐릭터·세대 번호 범위·PNG/GIF URL는 `shared/trainers.ts`를 기준으로 합니다.
 
 ## 구현 파일
 
@@ -96,7 +96,7 @@ API·SSE·탐색 주기는 `server/src/index.ts`에서 연결하며, 별도 라�
 
 ```text
 client/src/main.tsx
-client/public/lab/                # 공개 연구실 도트·제작자 이용 조건
+client/public/lab/                # 사용자 승인으로 제작한 연구소 배경
 client/src/app/App.tsx
 client/src/components/ResearchCamp.tsx
 client/src/components/Trainer.tsx

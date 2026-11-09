@@ -1,7 +1,7 @@
 async (page) => {
   const check = (value, message) => { if (!value) throw new Error(message); };
   check(new URL(page.url()).port === '4191', '합성 서버 4191에서만 실행합니다');
-  let mainRecords = 100, mainActive = true;
+  let mainRecords = 2000, mainActive = true;
   // Codex 프로세스를 실행하지 않는 UI 상태 픽스처
   await page.route('**/api/events*', async route => {
     const data = await (await page.request.get('http://127.0.0.1:4191/api/sessions')).json();
@@ -29,13 +29,14 @@ async (page) => {
   for (const s of [quiet, complete]) check((await station(s.sessionId).locator('img.sprite').getAttribute('src')).endsWith('.png'), '쉬는 포켓몬이 움직임');
   const small = Number(await station(active.sessionId).locator('.pokemon-figure').getAttribute('data-size'));
   const large = Number(await station(quiet.sessionId).locator('.pokemon-figure').getAttribute('data-size'));
-  check(small >= 42 && small < large && large <= 72, '키 기준 크기 조정 실패');
+  check(small >= 60 && small < large && large <= 96, '키 기준 크기 조정 실패');
+  check(await page.locator('.camp-trainer').evaluate(e => e.style.left === '235px' && e.style.top === '296px'), '트레이너가 회복 장치 발판에 없음');
   const initial = await Promise.all(before.map(s => position(s.sessionId)));
   check(initial.every((a, i) => initial.every((b, j) => i === j || Math.hypot(a.left - b.left, a.top - b.top) > 100)), '초기 배치가 뭉침');
   for (const s of [quiet, complete]) { const p = await position(s.sessionId); check(p.top + p.size >= 470 || p.top + p.size <= 390, '쉬는 포켓몬이 중앙에 배치됨'); }
   const ball = id => station(id).locator('.activity-ball');
-  check((await ball(active.sessionId).getAttribute('src')).endsWith('/master-ball.png'), '100회 마스터볼 누락');
-  check((await ball(complete.sessionId).getAttribute('src')).endsWith('/ultra-ball.png'), '20회 하이퍼볼 누락');
+  check((await ball(active.sessionId).getAttribute('src')).endsWith('/master-ball.png'), '2000회 마스터볼 누락');
+  check((await ball(complete.sessionId).getAttribute('src')).endsWith('/net-ball.png'), '20회 네트볼 누락');
   check((await ball(quiet.sessionId).getAttribute('src')).endsWith('/poke-ball.png'), '0회 몬스터볼 누락');
   await openDex(complete.sessionId);
   await page.waitForFunction(() => document.querySelector('.dex-display .pokemon-figure')?.dataset.normalized === 'true');
@@ -48,9 +49,12 @@ async (page) => {
   }
   await page.getByRole('button', { name: '연구소로 돌아가기', exact: true }).click();
   await page.setViewportSize({ width: 1440, height: 900 });
-  mainRecords = 1; await page.reload(); await page.locator('.camp-station').first().waitFor();
-  check((await ball(active.sessionId).getAttribute('src')).endsWith('/great-ball.png'), '1회 슈퍼볼 누락');
-  mainRecords = 100; await page.reload(); await page.locator('.camp-station').first().waitFor();
+  for (const [records, name] of [[1, 'premier-ball'], [10, 'great-ball'], [20, 'net-ball'], [50, 'dusk-ball'], [100, 'ultra-ball'], [200, 'repeat-ball'], [400, 'timer-ball'], [700, 'quick-ball'], [1000, 'luxury-ball']]) {
+    mainRecords = records; await page.reload(); await page.locator('.camp-station').first().waitFor();
+    check((await ball(active.sessionId).getAttribute('src')).endsWith(`/${name}.png`), `${records}회 볼 등급 오류`);
+    await ball(active.sessionId).evaluate(e => e.decode());
+  }
+  mainRecords = 2000; await page.reload(); await page.locator('.camp-station').first().waitFor();
   const positions = await page.locator('.camp-station').evaluateAll(es => es.map(e => ({ id: e.dataset.session, left: e.style.left, top: e.style.top })));
   await page.waitForFunction(old => old.some(p => { const e = document.querySelector(`.camp-station[data-session="${p.id}"]`); return e.style.left !== p.left || e.style.top !== p.top; }), positions, { timeout: 16000, polling: 100 });
   check(await station(active.sessionId).evaluate(e => getComputedStyle(e).transitionDuration !== '0s'), '사용 중 자유 이동 전환 누락');

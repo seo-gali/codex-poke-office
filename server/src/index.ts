@@ -15,7 +15,7 @@ import { trainers } from '../../shared/trainers.ts';
 import type { TrainerId } from '../../shared/trainers.ts';
 
 const assign = await assignments(config.data);
-const pokemon = await pokemonCache(config.data, config.api);
+const pokemon = await pokemonCache(config.data, config.api, refreshPokemon);
 const logs = new Map<string, LogState>();
 const clients = new Map<ServerResponse, TrainerId>();
 let snapshot: Snapshot = { sessions: [], error: null };
@@ -32,10 +32,11 @@ function publish() {
 }
 async function hydrate(character: TrainerId) {
   const ids = [...new Set(snapshot.sessions.map(s => s.pokemon[character].id))];
-  const values = new Map((await Promise.all(ids.map(id => pokemon.get(id)))).map(p => [p.id, p]));
+  await Promise.all(ids.map(id => pokemon.get(id)));
+}
+function refreshPokemon(value: Pokemon) {
   for (const session of snapshot.sessions) {
-    const value = values.get(session.pokemon[character].id);
-    if (value) session.pokemon[character] = value;
+    for (const character of Object.keys(trainers) as TrainerId[]) if (session.pokemon[character].id === value.id) session.pokemon[character] = value;
   }
   publish();
 }

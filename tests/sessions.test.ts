@@ -39,7 +39,9 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
   await mkdir(join(directory, 'data'));
   await writeFile(join(directory, 'data', 'assignments.json'), JSON.stringify({ [ids[0]]: 1007, [ids[1]]: 25 }));
   const port = await freePort(), clientPort = await freePort();
-  let apiFails = true, requested = 0, apiDelay = 0;
+  let apiFails = true, requested = 0, apiDelay = 0, speciesDelay = 0, delayFirstPokemon = false;
+  let slowPokemonId: number | null = null;
+  const requestedPaths = new Map<string, number>();
   const requestedIds = new Set<number>();
   const mock = createServer((request, response) => {
     assert.match(request.url!, /^\/pokemon(?:-species)?\/\d+$/);
@@ -47,9 +49,11 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
     if (apiFails) { response.writeHead(503).end(); return; }
     const id = Number(request.url!.split('/').at(-1));
     requestedIds.add(id);
+    requestedPaths.set(request.url!, (requestedPaths.get(request.url!) ?? 0) + 1);
+    if (delayFirstPokemon && request.url!.startsWith('/pokemon/') && slowPokemonId === null) slowPokemonId = id;
     response.setHeader('Content-Type', 'application/json');
     const body = JSON.stringify(request.url!.startsWith('/pokemon-species/') ? { id, names: [{ language: { name: 'en' }, name: `test-${id}` }, { language: { name: 'ko' }, name: `테스트${id}` }], flavor_text_entries: [{ language: { name: 'ko' }, flavor_text: '합성 도감\n설명' }], private: secretMarker } : { id, height: 10, types: [{ type: { name: 'normal' } }], private: secretMarker });
-    setTimeout(() => response.end(body), apiDelay);
+    setTimeout(() => response.end(body), request.url!.startsWith('/pokemon-species/') ? speciesDelay || apiDelay : id === slowPokemonId ? 1800 : apiDelay);
   });
   const apiPort = await listen(mock); t.after(() => { mock.closeAllConnections(); mock.close(); });
   let output = '';
@@ -139,9 +143,14 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
   const preserved = legacy.sessions.find(s => s.sessionId === ids[1])!.pokemon.red;
   assert.equal(preserved.name, '기존 피카츄', '키 정보 추가가 기존 이름을 지움');
   assert.equal(preserved.heightDm, null, '누락된 키를 임의 값으로 대체함');
+  const redController = new AbortController(); t.after(() => redController.abort());
+  await fetch(`${base}/api/events?trainer=red`, { signal: redController.signal });
+  await until(async () => (await (await fetch(`${base}/api/sessions`)).json()).sessions.find((s: Snapshot['sessions'][number]) => s.sessionId === ids[1]).pokemon.red.heightDm === 10, '기존 캐시의 키 조회 실패');
+  assert.equal(requestedPaths.get('/pokemon/25'), 1);
+  assert.equal(requestedPaths.get('/pokemon-species/25') ?? 0, 0, '키만 필요한 캐시에서 이름·설명을 다시 조회함');
   const selectedController = new AbortController(); t.after(() => selectedController.abort());
   await fetch(`${base}/api/events?trainer=brendan`, { signal: selectedController.signal });
-  await until(async () => (await snapshot()).sessions.every(s => s.pokemon.types.length > 0), '선택한 세대 정보 조회 실패');
+  await until(async () => (await snapshot()).sessions.every(s => s.pokemon.types.length > 0 && s.pokemon.description !== null), '선택한 세대 정보 조회 실패');
   for (const s of (await snapshot()).sessions) assert.equal(s.pokemon.id, mapping[s.sessionId].brendan);
   for (const s of (await snapshot()).sessions) assert.equal(s.pokemon.name, `테스트${s.pokemon.id}`);
   const raw: Snapshot = await (await fetch(`${base}/api/sessions`)).json();
@@ -170,11 +179,13 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
     assert.deepEqual((await (await fetch(`${base}/api/sessions`)).json()).sessions.map((s: Snapshot['sessions'][number]) => s.pokemon.elio.id), raw.sessions.map(s => s.pokemon.elio.id));
   } finally { await rmdir(blockedSave); }
   assert.equal((await fetch(`${base}/api/events?trainer=invalid`)).status, 400);
-  requestedIds.clear(); apiDelay = 1500;
+  requestedIds.clear(); requestedPaths.clear(); speciesDelay = 2500; delayFirstPokemon = true;
   const started = performance.now();
   const changed = await shuffle('elio'); assert.equal(changed.status, 200);
   assert.ok(performance.now() - started < 800, '전환이 외부 API 또는 파일 사용 조회를 기다림');
   const shuffled: Snapshot = await changed.json();
+  const elioController = new AbortController(); t.after(() => elioController.abort());
+  await fetch(`${base}/api/events?trainer=elio`, { signal: elioController.signal });
   assert.equal(new Set(shuffled.sessions.map(s => s.pokemon.elio.id)).size, 3);
   for (const session of shuffled.sessions) {
     const previous = raw.sessions.find(s => s.sessionId === session.sessionId)!;
@@ -184,12 +195,29 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
   }
   await until(async () => requestedIds.size === 3, '추첨한 세션 수만큼 조회하지 않음');
   assert.deepEqual([...requestedIds].sort(), shuffled.sessions.map(s => s.pokemon.elio.id).sort(), '선택하지 않은 세대를 조회함');
-  await until(async () => (await (await fetch(`${base}/api/sessions`)).json()).sessions.every((s: Snapshot['sessions'][number]) => s.pokemon.elio.types.length > 0), '지연된 정보의 후속 갱신 실패');
-  apiDelay = 0;
+  await until(async () => {
+    const current: Snapshot = await (await fetch(`${base}/api/sessions`)).json();
+    return current.sessions.some(s => s.pokemon.elio.heightDm === 10 && s.pokemon.elio.description === null) && current.sessions.some(s => s.pokemon.elio.id === slowPokemonId && s.pokemon.elio.heightDm === null);
+  }, '빠른 키가 느린 종 또는 도감 설명을 기다림');
+  const heightMs = Math.round(performance.now() - started);
+  assert.ok(heightMs < 1200, '키 반영이 느린 설명을 기다림');
+  await until(async () => (await (await fetch(`${base}/api/sessions`)).json()).sessions.every((s: Snapshot['sessions'][number]) => s.pokemon.elio.description !== null && s.pokemon.elio.heightDm === 10), '지연된 정보의 후속 갱신 실패');
+  assert.equal([...requestedPaths.values()].reduce((sum, count) => sum + count, 0), 6, '진행 중인 외부 요청을 중복 호출함');
+  console.log(`PASS: height update ${heightMs}ms with 2500ms species delay; 3 Pokemon, 6 requests, no duplicate calls; legacy height-only cache uses 1 request`);
+  await until(async () => {
+    const saved = JSON.parse(await readFile(join(directory, 'data', 'pokemon-cache.json'), 'utf8'));
+    return shuffled.sessions.every(s => saved[s.pokemon.elio.id]?.description && saved[s.pokemon.elio.id]?.heightDm === 10);
+  }, '완료한 정보의 캐시 저장 실패');
+  apiDelay = 0; speciesDelay = 0; delayFirstPokemon = false; slowPokemonId = null;
   const oldChild = child; oldChild.kill(); await once(oldChild, 'exit'); child = start();
   await until(async () => { try { return (await snapshot()).sessions.length === 3; } catch { return false; } }, '재배정 후 재시작 실패');
   const restored: Snapshot = await (await fetch(`${base}/api/sessions`)).json();
   assert.deepEqual(restored.sessions.map(s => s.pokemon.elio.id), shuffled.sessions.map(s => s.pokemon.elio.id));
+  const cachedRequests = requested;
+  const cachedController = new AbortController(); t.after(() => cachedController.abort());
+  await fetch(`${base}/api/events?trainer=elio`, { signal: cachedController.signal });
+  await new Promise(done => setTimeout(done, 300));
+  assert.equal(requested, cachedRequests, '재시작 후 완성된 캐시를 다시 요청함');
   const cache = await readFile(join(directory, 'data', 'pokemon-cache.json'), 'utf8');
   assert.ok(!cache.includes(secretMarker));
   if (process.platform === 'win32') {

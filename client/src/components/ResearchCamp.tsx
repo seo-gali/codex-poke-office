@@ -4,7 +4,7 @@ import type { SessionView } from '../../../shared/session.ts';
 import { PokemonAgent, pokemonDrawSize } from './PokemonAgent.tsx';
 import { time, usageLabels } from './SessionDetails.tsx';
 import { Trainer } from './Trainer.tsx';
-import { ActivityBall } from './ActivityBall.tsx';
+import { ActivityBall, activityBalls } from './ActivityBall.tsx';
 import { trainers } from '../../../shared/trainers.ts';
 import type { TrainerId } from '../../../shared/trainers.ts';
 
@@ -12,10 +12,10 @@ type Place = { x: number; y: number };
 const clamp = (n: number) => Math.min(.97, Math.max(.03, n));
 const point = (u: number, v: number): Place => ({ x: 400 + 260 * u - 70 * v, y: 355 + 100 * u + 145 * v });
 const onFloor = (x: number, y: number) => point(clamp((145 * (x - 400) + 70 * (y - 355)) / 44700), clamp((-100 * (x - 400) + 260 * (y - 355)) / 44700));
-const walls = [[{ x: 340, y: 500 }, { x: 520, y: 590 }], [{ x: 850, y: 470 }, { x: 640, y: 565 }], [{ x: 420, y: 340 }, { x: 660, y: 380 }]];
+const walls = [[{ x: 850, y: 470 }, { x: 640, y: 565 }], [{ x: 340, y: 500 }, { x: 520, y: 590 }], [{ x: 420, y: 340 }, { x: 660, y: 380 }]];
 function rest(index: number, count: number): Place {
   const side = index % walls.length, [a, b] = walls[side];
-  const t = (Math.floor(index / walls.length) + .5) / Math.ceil((count - side) / walls.length);
+  const t = (Math.floor(index / walls.length) + .25) / (Math.ceil((count - side) / walls.length) - .5);
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
 function onWall(x: number, y: number): Place {
@@ -61,7 +61,7 @@ export function ResearchCamp({ sessions, filter, still, onSelect, trainer }: { s
         if (drag.current?.key === key || Date.now() < (held.current[key] ?? 0) || Math.random() < .25) continue;
         const p = previous[key]; if (!p) continue;
         const candidate = onFloor(p.x + (Math.random() - .5) * 80, p.y + (Math.random() - .5) * 55);
-        if (keys.some(other => { if (other === key || !next[other]) return false; const p = next[other]; return Math.hypot(p.x - candidate.x, p.y - candidate.y) < 92; })) continue;
+        if (keys.some(other => { if (other === key || !next[other]) return false; const p = next[other]; return Math.hypot(p.x - candidate.x, p.y - candidate.y) < 110; })) continue;
         next[key] = candidate;
       }
       return next;
@@ -104,7 +104,7 @@ export function ResearchCamp({ sessions, filter, still, onSelect, trainer }: { s
           const key = actorId(session), active = session.usage === 'active';
           const group = ordered.filter(s => (s.usage === 'active') === active), rank = group.findIndex(s => s.sessionId === session.sessionId);
           const position = places[key] ?? (active ? spawn(key, rank, group.length) : rest(rank, group.length));
-          const size = 72;
+          const size = 96;
           return <button className="camp-station" type="button" key={key} data-session={session.sessionId} data-active={active} data-working={working(session) && !still} data-dragging={dragging === key} style={{ left: position.x - size / 2, top: position.y - size, width: size, height: size, zIndex: dragging === key ? 1000 : Math.round(position.y) }} aria-label={`${session.pokemon.name} · ${session.projectName} · ${session.activity.label}`} title="드래그·방향키로 이동 / 클릭·Enter로 도감 열기" onPointerDown={e => start(e, key)} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onClick={() => { if (!suppressClick.current) onSelect(session.sessionId); }} onKeyDown={e => {
             if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
             e.preventDefault(); const dx = e.key === 'ArrowLeft' ? -15 : e.key === 'ArrowRight' ? 15 : 0, dy = e.key === 'ArrowUp' ? -15 : e.key === 'ArrowDown' ? 15 : 0;
@@ -116,9 +116,9 @@ export function ResearchCamp({ sessions, filter, still, onSelect, trainer }: { s
             <strong className="camp-pokemon-name">{session.pokemon.name}<i className={`usage-dot ${session.usage}`} /></strong>
           </button>;
         })}
-        <div className="camp-trainer" style={{ left: 250, top: 410, zIndex: 498 }}><span className={`camp-trainer-sprite ${trainers[trainer].source === 'emerald' ? 'narrow' : ''}`}><Trainer character={trainer} /></span><strong>나 · {trainers[trainer].name}</strong></div>
+        <div className="camp-trainer" style={{ left: 235, top: 296, zIndex: 384 }}><span className={`camp-trainer-sprite ${trainers[trainer].source === 'emerald' ? 'narrow' : ''}`}><Trainer character={trainer} /></span><strong>나 · {trainers[trainer].name}</strong></div>
         {!visible.length && <p className="camp-empty">표시할 세션 포켓몬이 없어요</p>}
       </div></div>
-    </div><aside className="camp-log" aria-label="최근 캠프 활동"><h3>연구 노트 <span>{visible.length}</span></h3>{records.map(session => <button type="button" key={session.sessionId} data-session={session.sessionId} onClick={() => onSelect(session.sessionId)}><ActivityBall records={session.activity.records} /><span><strong>{session.pokemon.name}</strong><span>{session.activity.label}</span><small>{session.projectName ?? '프로젝트 미확인'} · {session.shortId}</small><small>누적 활동 {session.activity.records}회</small><small className="camp-activity-count">이번 응답 도구 {session.activity.toolCalls}회 · {usageLabels[session.usage]}</small>{session.activity.at && <small>{time(session.activity.at)}</small>}</span></button>)}<p>드래그·방향키로 옮기고 클릭하면 도감이 열려요.<br />활동 볼: 0 / 1–19 / 20–99 / 100회 이상<br />최근 활동과 파일 사용 여부는 별도 정보입니다.</p></aside></div>
+    </div><aside className="camp-log" aria-label="최근 캠프 활동"><h3>연구 노트 <span>{visible.length}</span></h3>{records.map(session => <button type="button" key={session.sessionId} data-session={session.sessionId} onClick={() => onSelect(session.sessionId)}><ActivityBall records={session.activity.records} /><span><strong>{session.pokemon.name}</strong><span>{session.activity.label}</span><small>{session.projectName ?? '프로젝트 미확인'} · {session.shortId}</small><small>누적 활동 {session.activity.records}회</small><small className="camp-activity-count">이번 응답 도구 {session.activity.toolCalls}회 · {usageLabels[session.usage]}</small>{session.activity.at && <small>{time(session.activity.at)}</small>}</span></button>)}<p>드래그·방향키로 옮기고 클릭하면 도감이 열려요.<br />활동 볼 {activityBalls.length}단계 · 2,000회부터 마스터볼<br />최근 활동과 파일 사용 여부는 별도 정보입니다.</p></aside></div>
   </div>;
 }

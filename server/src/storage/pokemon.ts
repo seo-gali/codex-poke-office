@@ -11,10 +11,10 @@ function sprite(value: unknown): string | null {
     return url.protocol === 'https:' && url.hostname === 'raw.githubusercontent.com' && url.pathname.startsWith('/PokeAPI/sprites/') && !url.search ? url.href : null;
   } catch { return null; }
 }
-export async function pokemonCache(directory: string, api: string) {
+export async function pokemonCache(directory: string, api: string, changed: (pokemon: Pokemon) => void) {
   const file = join(directory, 'pokemon-cache.json');
   const cache = await loadJson(file);
-  const retry = new Map<number, number>();
+  const retry = new Map<string, number>();
   const pending = new Map<number, Promise<Pokemon>>();
   let saving = Promise.resolve();
   const peek = (id: number): Pokemon => {
@@ -25,26 +25,39 @@ export async function pokemonCache(directory: string, api: string) {
   };
   const get = async (id: number): Promise<Pokemon> => {
     const fallback = peek(id);
-    if (fallback.types.length && fallback.heightDm !== null) return fallback;
-    if (Date.now() < (retry.get(id) ?? 0)) return fallback;
+    const resources = [
+      ...(!fallback.types.length || fallback.heightDm === null ? ['pokemon'] : []),
+      ...(fallback.name === `포켓몬 #${id}` ? ['pokemon-species'] : []),
+    ].filter(resource => Date.now() >= (retry.get(`${resource}/${id}`) ?? 0));
+    if (!resources.length) return fallback;
     if (pending.has(id)) return pending.get(id)!;
     const request = (async () => { try {
-      const responses = await Promise.all(['pokemon', 'pokemon-species'].map(resource => fetch(`${api}/${resource}/${id}`, { signal: AbortSignal.timeout(5000), redirect: 'error' })));
-      if (responses.some(response => !response.ok)) throw new Error('PokéAPI');
-      const [body, species] = await Promise.all(responses.map(response => response.json()));
-      const name = Array.isArray(species.names) ? species.names.find((entry: { language?: { name?: string } }) => entry.language?.name === 'ko')?.name : null;
-      if (body.id !== id || species.id !== id || typeof name !== 'string' || !/[가-힣]/.test(name)) throw new Error('Invalid pokemon');
-      if (!Number.isInteger(body.height) || body.height <= 0) throw new Error('Invalid pokemon height');
-      const spriteUrl = pokemonSprite(id);
-      if (!Array.isArray(body.types) || !body.types.length || !body.types.every((entry: { type?: { name?: string } }) => typeof entry.type?.name === 'string' && Object.hasOwn(types, entry.type.name))) throw new Error('Pokemon type unavailable');
-      const description = Array.isArray(species.flavor_text_entries) ? species.flavor_text_entries.find((entry: { language?: { name?: string } }) => entry.language?.name === 'ko')?.flavor_text : null;
-      const value = { id, name, spriteUrl, types: body.types.map((entry: { type: { name: string } }) => types[entry.type.name]), description: typeof description === 'string' ? description.replace(/[\n\f]/g, ' ') : null, heightDm: body.height };
-      cache[id] = value;
-      await (saving = saving.catch(() => {}).then(() => saveJson(file, cache)));
+      let value = fallback;
+      await Promise.all(resources.map(async resource => {
+        let patch: Partial<Pokemon>;
+        try {
+          const response = await fetch(`${api}/${resource}/${id}`, { signal: AbortSignal.timeout(5000), redirect: 'error' });
+          if (!response.ok) throw new Error('PokéAPI');
+          const body = await response.json();
+          if (body.id !== id) throw new Error('Invalid pokemon');
+          if (resource === 'pokemon') {
+            if (!Number.isInteger(body.height) || body.height <= 0) throw new Error('Invalid pokemon height');
+            if (!Array.isArray(body.types) || !body.types.length || !body.types.every((entry: { type?: { name?: string } }) => typeof entry.type?.name === 'string' && Object.hasOwn(types, entry.type.name))) throw new Error('Pokemon type unavailable');
+            patch = { heightDm: body.height, types: body.types.map((entry: { type: { name: string } }) => types[entry.type.name]) };
+          } else {
+            const name = Array.isArray(body.names) ? body.names.find((entry: { language?: { name?: string } }) => entry.language?.name === 'ko')?.name : null;
+            if (typeof name !== 'string' || !/[가-힣]/.test(name)) throw new Error('Invalid pokemon name');
+            const description = Array.isArray(body.flavor_text_entries) ? body.flavor_text_entries.find((entry: { language?: { name?: string } }) => entry.language?.name === 'ko')?.flavor_text : null;
+            patch = { name, description: typeof description === 'string' ? description.replace(/[\n\f]/g, ' ') : null };
+          }
+        } catch { retry.set(`${resource}/${id}`, Date.now() + 60000); return; }
+        value = { ...value, ...patch }; cache[id] = value; changed(value);
+      }));
+      if (value !== fallback) {
+        try { await (saving = saving.catch(() => {}).then(() => saveJson(file, cache))); }
+        catch { console.error('포켓몬 캐시를 저장하지 못했습니다. data 폴더를 확인하세요.'); }
+      }
       return value;
-    } catch {
-      retry.set(id, Date.now() + 60000);
-      return fallback;
     } finally { pending.delete(id); } })();
     pending.set(id, request);
     return request;

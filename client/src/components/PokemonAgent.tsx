@@ -4,7 +4,7 @@ import { pokemonSprite } from '../../../shared/trainers.ts';
 
 type Bounds = { url: string; width: number; height: number; left: number; top: number; right: number; bottom: number };
 const boundsCache = new Map<string, Bounds>();
-export const pokemonDrawSize = (pokemon: Pokemon) => pokemon.heightDm === null ? 48 : Math.max(42, Math.min(72, 34 + pokemon.heightDm * 1.4));
+export const pokemonDrawSize = (pokemon: Pokemon) => pokemon.heightDm === null ? 68 : Math.max(60, Math.min(96, 50 + pokemon.heightDm * 1.8));
 
 export function PokemonAgent({ pokemon, still = false, magnification = 1 }: { pokemon: Pokemon; still?: boolean; magnification?: number }) {
   const [failed, setFailed] = useState<string[]>([]);

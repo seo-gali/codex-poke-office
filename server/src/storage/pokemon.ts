@@ -20,12 +20,12 @@ export async function pokemonCache(directory: string, api: string) {
   const peek = (id: number): Pokemon => {
     const saved = cache[id] as Pokemon | undefined;
     const valid = saved?.id === id && typeof saved.name === 'string' && (saved.spriteUrl === null || sprite(saved.spriteUrl));
-    if (valid && /[가-힣]/.test(saved.name) && [pokemonSprite(id), pokemonSprite(id, false)].includes(saved.spriteUrl!) && Array.isArray(saved.types) && saved.types.every(type => Object.values(types).includes(type)) && (saved.description === null || typeof saved.description === 'string')) return { id, name: saved.name, spriteUrl: pokemonSprite(id), types: saved.types, description: saved.description };
-    return { id, name: `포켓몬 #${id}`, spriteUrl: pokemonSprite(id), types: [], description: null };
+    if (valid && /[가-힣]/.test(saved.name) && [pokemonSprite(id), pokemonSprite(id, false)].includes(saved.spriteUrl!) && Array.isArray(saved.types) && saved.types.every(type => Object.values(types).includes(type)) && (saved.description === null || typeof saved.description === 'string')) return { id, name: saved.name, spriteUrl: pokemonSprite(id), types: saved.types, description: saved.description, heightDm: Number.isInteger(saved.heightDm) && saved.heightDm! > 0 ? saved.heightDm : null };
+    return { id, name: `포켓몬 #${id}`, spriteUrl: pokemonSprite(id), types: [], description: null, heightDm: null };
   };
   const get = async (id: number): Promise<Pokemon> => {
     const fallback = peek(id);
-    if (fallback.types.length) return fallback;
+    if (fallback.types.length && fallback.heightDm !== null) return fallback;
     if (Date.now() < (retry.get(id) ?? 0)) return fallback;
     if (pending.has(id)) return pending.get(id)!;
     const request = (async () => { try {
@@ -34,10 +34,11 @@ export async function pokemonCache(directory: string, api: string) {
       const [body, species] = await Promise.all(responses.map(response => response.json()));
       const name = Array.isArray(species.names) ? species.names.find((entry: { language?: { name?: string } }) => entry.language?.name === 'ko')?.name : null;
       if (body.id !== id || species.id !== id || typeof name !== 'string' || !/[가-힣]/.test(name)) throw new Error('Invalid pokemon');
+      if (!Number.isInteger(body.height) || body.height <= 0) throw new Error('Invalid pokemon height');
       const spriteUrl = pokemonSprite(id);
       if (!Array.isArray(body.types) || !body.types.length || !body.types.every((entry: { type?: { name?: string } }) => typeof entry.type?.name === 'string' && Object.hasOwn(types, entry.type.name))) throw new Error('Pokemon type unavailable');
       const description = Array.isArray(species.flavor_text_entries) ? species.flavor_text_entries.find((entry: { language?: { name?: string } }) => entry.language?.name === 'ko')?.flavor_text : null;
-      const value = { id, name, spriteUrl, types: body.types.map((entry: { type: { name: string } }) => types[entry.type.name]), description: typeof description === 'string' ? description.replace(/[\n\f]/g, ' ') : null };
+      const value = { id, name, spriteUrl, types: body.types.map((entry: { type: { name: string } }) => types[entry.type.name]), description: typeof description === 'string' ? description.replace(/[\n\f]/g, ' ') : null, heightDm: body.height };
       cache[id] = value;
       await (saving = saving.catch(() => {}).then(() => saveJson(file, cache)));
       return value;

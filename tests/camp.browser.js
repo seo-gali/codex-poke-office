@@ -1,12 +1,12 @@
 async (page) => {
   const check = (value, message) => { if (!value) throw new Error(message); };
   check(new URL(page.url()).port === '4191', '합성 서버 4191에서만 실행합니다');
-  let mainRecords = 100;
+  let mainRecords = 100, mainActive = true;
   // Codex 프로세스를 실행하지 않는 UI 상태 픽스처
   await page.route('**/api/events*', async route => {
     const data = await (await page.request.get('http://127.0.0.1:4191/api/sessions')).json();
     const sample = data.sessions.find(s => s.activity.kind === 'tool');
-    sample.usage = 'active'; sample.observation = 'recent-event'; sample.activity.at = new Date().toISOString(); sample.activity.records = mainRecords;
+    sample.usage = mainActive ? 'active' : 'inactive'; sample.observation = 'recent-event'; sample.activity.at = new Date().toISOString(); sample.activity.records = mainRecords;
     data.sessions.find(s => s.activity.kind === 'complete').activity.records = 20;
     await route.fulfill({ status: 200, contentType: 'text/event-stream', body: `data: ${JSON.stringify(data)}\n\n` });
   });
@@ -18,37 +18,70 @@ async (page) => {
   check(before.length === 3 && before.every(s => s.projectName === 'browser-check'), '합성 기록만 허용합니다');
   check(active && quiet && quiet.usage === 'inactive', '합성 사용 여부 누락');
   const station = id => page.locator(`.camp-station[data-session="${id}"]`);
+  const openDex = async id => { const note = page.locator(`.camp-log button[data-session="${id}"]`); await (await note.isVisible() ? note : station(id)).click(); };
   const position = async id => station(id).evaluate(e => ({ left: parseFloat(e.style.left), top: parseFloat(e.style.top), size: parseFloat(e.style.width) }));
   check(await page.getByRole('button', { name: '탐험', exact: true }).count() === 0, '탐험 탭이 남음');
   await page.locator('.lab-background').evaluate(e => e.decode());
   check(await page.locator('.lab-background').evaluate(e => e.naturalWidth === 1536 && e.naturalHeight === 1024), '배경 변경 또는 로딩 실패');
   check((await (await page.request.get('http://127.0.0.1:4191/lab/oak-lab.png')).headers())['content-type'] === 'image/png', '배경 제공 실패');
-  for (const session of before) check((await station(session.sessionId).locator('img.sprite').getAttribute('src')).endsWith('.gif'), '미사용·완료 포켓몬 GIF가 정지함');
+  await page.waitForFunction(() => [...document.querySelectorAll('.camp-station .pokemon-figure')].every(e => e.dataset.normalized === 'true'));
+  check((await station(active.sessionId).locator('img.sprite').getAttribute('src')).endsWith('.gif'), '사용 중 GIF 미재생');
+  for (const s of [quiet, complete]) check((await station(s.sessionId).locator('img.sprite').getAttribute('src')).endsWith('.png'), '쉬는 포켓몬이 움직임');
+  const small = Number(await station(active.sessionId).locator('.pokemon-figure').getAttribute('data-size'));
+  const large = Number(await station(quiet.sessionId).locator('.pokemon-figure').getAttribute('data-size'));
+  check(small >= 42 && small < large && large <= 72, '키 기준 크기 조정 실패');
+  const initial = await Promise.all(before.map(s => position(s.sessionId)));
+  check(initial.every((a, i) => initial.every((b, j) => i === j || Math.hypot(a.left - b.left, a.top - b.top) > 100)), '초기 배치가 뭉침');
+  for (const s of [quiet, complete]) { const p = await position(s.sessionId); check(p.top + p.size >= 470 || p.top + p.size <= 390, '쉬는 포켓몬이 중앙에 배치됨'); }
   const ball = id => station(id).locator('.activity-ball');
   check((await ball(active.sessionId).getAttribute('src')).endsWith('/master-ball.png'), '100회 마스터볼 누락');
   check((await ball(complete.sessionId).getAttribute('src')).endsWith('/ultra-ball.png'), '20회 하이퍼볼 누락');
   check((await ball(quiet.sessionId).getAttribute('src')).endsWith('/poke-ball.png'), '0회 몬스터볼 누락');
+  await openDex(complete.sessionId);
+  await page.waitForFunction(() => document.querySelector('.dex-display .pokemon-figure')?.dataset.normalized === 'true');
+  for (const [width, height] of [[320, 480], [568, 320]]) {
+    await page.setViewportSize({ width, height });
+    check(await page.locator('.dex-display').evaluate(e => {
+      const frame = e.getBoundingClientRect(), body = e.querySelector('.pokemon-figure').getBoundingClientRect(), css = getComputedStyle(e);
+      return body.left >= frame.left + parseFloat(css.borderLeftWidth) + parseFloat(css.paddingLeft) - .5 && body.right <= frame.right - parseFloat(css.borderRightWidth) - parseFloat(css.paddingRight) + .5;
+    }), '큰 포켓몬이 좁은 도감 틀을 넘음');
+  }
+  await page.getByRole('button', { name: '연구소로 돌아가기', exact: true }).click();
+  await page.setViewportSize({ width: 1440, height: 900 });
   mainRecords = 1; await page.reload(); await page.locator('.camp-station').first().waitFor();
   check((await ball(active.sessionId).getAttribute('src')).endsWith('/great-ball.png'), '1회 슈퍼볼 누락');
   mainRecords = 100; await page.reload(); await page.locator('.camp-station').first().waitFor();
   const positions = await page.locator('.camp-station').evaluateAll(es => es.map(e => ({ id: e.dataset.session, left: e.style.left, top: e.style.top })));
   await page.waitForFunction(old => old.some(p => { const e = document.querySelector(`.camp-station[data-session="${p.id}"]`); return e.style.left !== p.left || e.style.top !== p.top; }), positions, { timeout: 16000, polling: 100 });
-  check(await page.locator('.camp-station').first().evaluate(e => getComputedStyle(e).transitionDuration !== '0s'), '자유 이동 전환 누락');
+  check(await station(active.sessionId).evaluate(e => getComputedStyle(e).transitionDuration !== '0s'), '사용 중 자유 이동 전환 누락');
+  for (const s of [quiet, complete]) {
+    const old = positions.find(p => p.id === s.sessionId), current = await position(s.sessionId);
+    check(parseFloat(old.left) === current.left && parseFloat(old.top) === current.top, '쉬는 포켓몬 좌표가 바뀜');
+  }
+  const previousActive = await position(active.sessionId); mainActive = false;
+  await page.waitForFunction(id => document.querySelector(`.camp-station[data-session="${id}"]`).dataset.active === 'false', active.sessionId);
+  await page.waitForFunction(({ id, p }) => { const e = document.querySelector(`.camp-station[data-session="${id}"]`); return parseFloat(e.style.left) !== p.left || parseFloat(e.style.top) !== p.top; }, { id: active.sessionId, p: previousActive });
+  const parked = await position(active.sessionId); await page.waitForTimeout(3800);
+  check(JSON.stringify(parked) === JSON.stringify(await position(active.sessionId)), '사용 중 해제 후 계속 이동');
+  check((await station(active.sessionId).locator('img.sprite').getAttribute('src')).endsWith('.png'), '사용 중 해제 후 GIF 재생');
+  mainActive = true;
+  await page.waitForFunction(id => document.querySelector(`.camp-station[data-session="${id}"]`).dataset.active === 'true' && document.querySelector(`.camp-station[data-session="${id}"] img.sprite`).src.endsWith('.gif'), active.sessionId);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.waitForFunction(() => [...document.querySelectorAll('.camp-station img.sprite')].every(e => e.src.endsWith('.png')));
   const paused = await position(quiet.sessionId); await page.waitForTimeout(3800);
   check(JSON.stringify(paused) === JSON.stringify(await position(quiet.sessionId)), '모션 감소 중 자동 이동');
-  const b = await station(quiet.sessionId).boundingBox(), room = await page.locator('.lab-room').boundingBox(), scale = room.width / 1024;
+  const activePaused = await position(active.sessionId);
+  const b = await station(active.sessionId).boundingBox(), room = await page.locator('.lab-room').boundingBox(), scale = room.width / 1024;
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await page.mouse.down();
-  await page.mouse.move(room.x + 514 * scale, room.y + (502 - paused.size / 2) * scale, { steps: 10 }); await page.mouse.up();
-  const moved = await position(quiet.sessionId);
+  await page.mouse.move(room.x + 514 * scale, room.y + (502 - activePaused.size / 2) * scale, { steps: 10 }); await page.mouse.up();
+  const moved = await position(active.sessionId);
   check(Math.abs(moved.left + moved.size / 2 - 514) < 2 && Math.abs(moved.top + moved.size - 502) < 2, '드래그 좌표 불일치');
   check(await page.locator('.pokedex-dialog[open]').count() === 0, '드래그가 도감을 엶');
-  await station(quiet.sessionId).focus(); await station(quiet.sessionId).press('ArrowRight');
-  check((await position(quiet.sessionId)).left > moved.left, '방향키 위치 이동 실패');
-  const current = await station(quiet.sessionId).boundingBox();
+  await station(active.sessionId).focus(); await station(active.sessionId).press('ArrowRight');
+  check((await position(active.sessionId)).left > moved.left, '방향키 위치 이동 실패');
+  const current = await station(active.sessionId).boundingBox();
   await page.mouse.move(current.x + current.width / 2, current.y + current.height / 2); await page.mouse.down(); await page.mouse.move(5, 5, { steps: 10 }); await page.mouse.up();
-  const edge = await position(quiet.sessionId), x = edge.left + edge.size / 2 - 400, y = edge.top + edge.size - 355;
+  const edge = await position(active.sessionId), x = edge.left + edge.size / 2 - 400, y = edge.top + edge.size - 355;
   const u = (145 * x + 70 * y) / 44700, v = (-100 * x + 260 * y) / 44700;
   check(u >= .029 && u <= .971 && v >= .029 && v <= .971, '바닥 밖으로 드래그됨');
   await page.emulateMedia({ reducedMotion: 'no-preference' }); await page.waitForFunction(() => document.querySelector('.lab-room').dataset.still === 'false');
@@ -61,10 +94,14 @@ async (page) => {
     const started = Date.now(); await choose(id); changes.push(Date.now() - started);
     await page.waitForFunction(name => document.querySelector(`.camp-trainer [aria-label="내 트레이너 · ${name}"] img`)?.src.startsWith('data:'), name);
     check(await page.locator('.camp-trainer-sprite').evaluate(e => e.getBoundingClientRect().height >= 70), `${name} 표시 크기가 작음`);
-    await station(active.sessionId).click({ force: true }); await page.locator('.pokedex-dialog[open]').waitFor(); await page.waitForFunction(() => document.querySelector('.dex-display img.sprite')?.src.endsWith('.gif'));
+    await openDex(active.sessionId); await page.locator('.pokedex-dialog[open]').waitFor(); await page.waitForFunction(() => document.querySelector('.dex-display img.sprite')?.src.endsWith('.gif'));
     check(await page.locator('.pokedex-dialog .trainer,.battle-background,.encounter-scene').count() === 0, '이전 배틀 장면이 남음');
     check((await page.locator('.dex-description').innerText()).includes('합성 도감 설명'), '도감 기본 설명 누락');
     check((await page.locator('.dex-display img').getAttribute('src')).endsWith('.gif'), '도감 GIF 미재생');
+    await page.waitForFunction(() => document.querySelector('.dex-display .pokemon-figure').dataset.normalized === 'true');
+    const dexSize = Number(await page.locator('.dex-display .pokemon-figure').getAttribute('data-size'));
+    const roomSize = Number(await station(active.sessionId).locator('.pokemon-figure').getAttribute('data-size'));
+    check(Math.abs(dexSize / roomSize - 3) < .001, '도감과 연구소 크기 기준 불일치');
     check(await page.getByRole('button', { name: '포켓몬 놓아주기 ↗' }).isDisabled(), '사용 중 기록 보호 실패');
     await page.getByRole('button', { name: '연구소로 돌아가기', exact: true }).click();
   }
@@ -80,8 +117,8 @@ async (page) => {
   check(JSON.stringify(await position(active.sessionId)) === JSON.stringify(fixed), '필터가 좌표를 초기화함');
   await page.getByRole('button', { name: '사용 안 함', exact: true }).click(); check(await page.locator('.camp-station').count() === 2, '미사용 필터 실패');
   await page.getByRole('button', { name: '모두', exact: true }).click(); await page.emulateMedia({ reducedMotion: 'no-preference' }); await page.waitForFunction(() => document.querySelector('.lab-room').dataset.still === 'false');
-  await station(quiet.sessionId).click({ force: true });
-  check((await page.locator('.dex-display img').getAttribute('src')).endsWith('.gif'), '미사용 포켓몬 도감 미재생');
+  await openDex(quiet.sessionId);
+  check((await page.locator('.dex-display img').getAttribute('src')).endsWith('.png'), '쉬는 포켓몬 도감이 움직임');
   await page.locator('.dex-session summary').click();
   check((await page.locator('.dex-session').innerText()).includes(quiet.sessionId), '세션 ID 누락');
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'http://127.0.0.1:4191' });
@@ -96,7 +133,7 @@ async (page) => {
     check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), `${width}x${height} 페이지 넘침`);
     await page.locator('.camp-trainer').scrollIntoViewIfNeeded(); await station(active.sessionId).scrollIntoViewIfNeeded();
     await page.screenshot({ path: `data/camp-fixture-${width}x${height}.png`, fullPage: true });
-    await station(quiet.sessionId).click({ force: true });
+    await openDex(quiet.sessionId);
   }
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole('button', { name: '포켓몬 놓아주기 ↗' }).click(); await page.getByRole('button', { name: '곁에 두기', exact: true }).click(); check((await snapshot()).length === 3, '놓아주기 취소 시 소실');
@@ -104,11 +141,11 @@ async (page) => {
   await page.waitForFunction(() => document.querySelectorAll('.camp-station').length === 2); check((await snapshot()).every(s => s.sessionId !== quiet.sessionId), '합성 기록 삭제 실패');
   await page.route('**/pokemon/versions/generation-v/black-white/animated/*.gif', route => route.abort());
   await choose('red'); await page.reload(); await page.locator('.camp-station').first().waitFor();
-  await page.waitForFunction(() => [...document.querySelectorAll('.camp-station img.sprite')].every(e => e.src.includes('/other/showdown/')));
+  await page.waitForFunction(id => document.querySelector(`.camp-station[data-session="${id}"] img.sprite`).src.includes('/other/showdown/'), active.sessionId);
   await page.route('**/pokemon/other/showdown/*.gif', route => route.abort());
   await page.reload(); await page.locator('.camp-station').first().waitFor();
-  await page.waitForFunction(() => document.querySelectorAll('.camp-station .sprite-idle').length === 2);
-  check(await station(complete.sessionId).locator('img.sprite').evaluate(e => getComputedStyle(e).animationName !== 'none'), 'PNG 대체 대기 모션 누락');
+  await page.waitForFunction(() => document.querySelectorAll('.camp-station .sprite-idle').length === 1);
+  check(await station(active.sessionId).locator('img.sprite').evaluate(e => getComputedStyle(e).animationName !== 'none'), 'PNG 대체 대기 모션 누락');
   await page.unroute('**/pokemon/versions/generation-v/black-white/animated/*.gif');
   await page.unroute('**/pokemon/other/showdown/*.gif');
   await choose('gloria');
@@ -118,5 +155,5 @@ async (page) => {
   check(await loading.locator('.camp-trainer svg').count() === 0, '임시 사람 그림이 남음'); release(); await loading.locator('.camp-trainer .trainer-art img').waitFor(); await loading.close();
   const failed = await page.context().newPage(); await failed.route('**/overworlds/*.webp', route => route.abort()); await failed.goto('http://127.0.0.1:4191'); await failed.locator('.camp-trainer .trainer-error').waitFor(); await failed.close();
   await page.unroute('**/api/events*');
-  return { maxSwitchMs: Math.max(...changes), roaming: true, drag: true, floorBounds: true, keyboard: true, cumulativeBalls: true, allAnimated: true, animatedFallback: true, pokedex: true, noBattleScene: true, trainers: 15, reducedMotion: true, reshuffle: true, filters: true, clipboard: true, responsive: true, release: true, loading: true, loadError: true };
+  return { maxSwitchMs: Math.max(...changes), roaming: true, drag: true, floorBounds: true, keyboard: true, cumulativeBalls: true, activeOnlyAnimated: true, sizeByHeight: true, wallRest: true, animatedFallback: true, pokedex: true, noBattleScene: true, trainers: 15, reducedMotion: true, reshuffle: true, filters: true, clipboard: true, responsive: true, release: true, loading: true, loadError: true };
 }

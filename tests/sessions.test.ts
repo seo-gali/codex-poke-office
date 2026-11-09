@@ -48,7 +48,7 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
     const id = Number(request.url!.split('/').at(-1));
     requestedIds.add(id);
     response.setHeader('Content-Type', 'application/json');
-    const body = JSON.stringify(request.url!.startsWith('/pokemon-species/') ? { id, names: [{ language: { name: 'en' }, name: `test-${id}` }, { language: { name: 'ko' }, name: `테스트${id}` }], flavor_text_entries: [{ language: { name: 'ko' }, flavor_text: '합성 도감\n설명' }], private: secretMarker } : { id, types: [{ type: { name: 'normal' } }], private: secretMarker });
+    const body = JSON.stringify(request.url!.startsWith('/pokemon-species/') ? { id, names: [{ language: { name: 'en' }, name: `test-${id}` }, { language: { name: 'ko' }, name: `테스트${id}` }], flavor_text_entries: [{ language: { name: 'ko' }, flavor_text: '합성 도감\n설명' }], private: secretMarker } : { id, height: 10, types: [{ type: { name: 'normal' } }], private: secretMarker });
     setTimeout(() => response.end(body), apiDelay);
   });
   const apiPort = await listen(mock); t.after(() => { mock.closeAllConnections(); mock.close(); });
@@ -132,9 +132,13 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
   apiFails = false;
   const mapping = JSON.parse(await readFile(join(directory, 'data', 'assignments.json'), 'utf8'));
   const cachedId = mapping[ids[0]].brendan;
-  await writeFile(join(directory, 'data', 'pokemon-cache.json'), JSON.stringify({ [cachedId]: { id: cachedId, name: 'old-english-name', spriteUrl: null } }));
+  await writeFile(join(directory, 'data', 'pokemon-cache.json'), JSON.stringify({ [cachedId]: { id: cachedId, name: 'old-english-name', spriteUrl: null }, 25: { id: 25, name: '기존 피카츄', spriteUrl: pokemonSprite(25, false), types: ['전기'], description: '보존한 설명' } }));
   child = start();
   await until(async () => { try { return (await snapshot()).sessions.length === 3; } catch { return false; } }, '재시작 실패');
+  const legacy: Snapshot = await (await fetch(`${base}/api/sessions`)).json();
+  const preserved = legacy.sessions.find(s => s.sessionId === ids[1])!.pokemon.red;
+  assert.equal(preserved.name, '기존 피카츄', '키 정보 추가가 기존 이름을 지움');
+  assert.equal(preserved.heightDm, null, '누락된 키를 임의 값으로 대체함');
   const selectedController = new AbortController(); t.after(() => selectedController.abort());
   await fetch(`${base}/api/events?trainer=brendan`, { signal: selectedController.signal });
   await until(async () => (await snapshot()).sessions.every(s => s.pokemon.types.length > 0), '선택한 세대 정보 조회 실패');
@@ -147,7 +151,7 @@ test('실제 HTTP/SSE 경로: 탐색, 신규/동일 ID, 증분, 손상, 장애, 
       assert.ok(choice.id >= range.first && choice.id <= range.last);
       assert.ok(pokemonCandidates(character).includes(choice.id));
       assert.equal(choice.spriteUrl, pokemonSprite(choice.id));
-      if (character === 'brendan') { assert.deepEqual(choice.types, ['노말']); assert.equal(choice.description, '합성 도감 설명'); }
+      if (character === 'brendan') { assert.equal(choice.heightDm, 10); assert.deepEqual(choice.types, ['노말']); assert.equal(choice.description, '합성 도감 설명'); }
     }
     assert.equal(new Set(Object.values(session.pokemon).map(p => p.id)).size, Object.keys(trainers).length);
   }

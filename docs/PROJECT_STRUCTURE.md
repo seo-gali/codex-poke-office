@@ -79,6 +79,7 @@ interface SessionRecord {
     spriteUrl: string | null;
     types: string[];
     description: string | null;
+    heightDm: number | null;
   }>;
   lastObservedAt: string | null;
   lastFileModifiedAt: string | null;
@@ -88,7 +89,9 @@ interface SessionRecord {
 }
 ```
 
-`observation`은 실제 프로세스 실행 상태가 아니라 관측 결과입니다. `activity`는 로그에서 확인한 종류·정해진 문구·시각·도구 호출 수만 포함합니다. API는 캐릭터별 포켓몬을 전달하고 프런트엔드는 선택한 캐릭터의 `pokemon` 하나를 `SessionView`로 표시합니다. 캐릭터 선택 변경 시 재배정하고 일반 갱신·새로고침에서는 마지막 배정을 유지합니다. 조회 전·실패 시 `name`은 `포켓몬 #번호`이며 번호로 확인할 수 있는 PNG·GIF는 먼저 표시합니다. 확정 타입은 `shared/session.ts`, `TrainerId`·15개 캐릭터·세대 번호 범위·PNG/GIF URL는 `shared/trainers.ts`를 기준으로 합니다.
+`observation`은 실제 프로세스 실행 상태가 아니라 관측 결과입니다. `activity`는 로그에서 확인한 종류·정해진 문구·시각·도구 호출 수와 누적 기록 수만 포함합니다. API는 캐릭터별 포켓몬을 전달하고 프런트엔드는 선택한 캐릭터의 `pokemon` 하나를 `SessionView`로 표시합니다. 캐릭터 선택 변경 시 재배정하고 일반 갱신·새로고침에서는 마지막 배정을 유지합니다. 조회 전·실패 시 `name`은 `포켓몬 #번호`이며 번호로 확인할 수 있는 PNG·GIF는 먼저 표시합니다. `heightDm`은 PokéAPI의 실제 키이며 미조회 시 null입니다. 기존 캐시의 이름을 지우지 않고 키를 후속 조회합니다. 확정 타입은 `shared/session.ts`, `TrainerId`·15개 캐릭터·세대 번호 범위·PNG/GIF URL는 `shared/trainers.ts`를 기준으로 합니다.
+
+`ResearchCamp`는 사용 중인 세션만 바닥에서 이동시키며 나머지는 벽의 휴식 구역에 정지시킵니다. `PokemonAgent`는 이미지의 투명 여백을 제외하고 키 기준 크기를 적용합니다. `pokemonDrawSize`를 연구소와 도감이 공유하며 도감은 기본 3배로 확대하고 좁은 틀에서는 비율을 유지하며 줄입니다. GIF 실패 대체와 모션 감소는 이 컴포넌트에서 처리합니다.
 
 ## 구현 파일
 

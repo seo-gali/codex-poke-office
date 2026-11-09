@@ -6,6 +6,7 @@ export interface Pokemon {
   spriteUrl: string | null;
   types: string[];
   description: string | null;
+  heightDm: number | null;
 }
 
 export interface SessionRecord {
